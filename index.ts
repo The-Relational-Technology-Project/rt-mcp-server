@@ -1045,7 +1045,7 @@ async function startHTTP() {
 <html><head><title>RTP Relational Tech MCP Server</title></head>
 <body style="font-family:system-ui;max-width:600px;margin:4rem auto;padding:0 1rem">
 <h1>RTP Relational Tech MCP Server</h1>
-<p><em>"We are the river — carrying stories, tools, learning, and relationships
+<p><em>"We are a river, carrying stories, tools, learning, and relationships
 across many local gardens."</em></p>
 <p>This is an MCP server for the <a href="https://relationaltechproject.org">Relational Tech Project</a>.
 Connect your AI tool to <code>${req.headers.host}/mcp</code> to get started.</p>
