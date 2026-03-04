@@ -10,7 +10,7 @@
  *   - stdio (default): For local use with Claude Code, Cursor, etc.
  *   - http:  For hosted deployment. Set RTP_MCP_TRANSPORT=http
  *
- * "We are the river — carrying stories, tools, learning, and relationships
+ * "We are a river, carrying stories, tools, learning, and relationships
  * across many local gardens, while honoring that each garden must be tended
  * by those who live there."
  */
