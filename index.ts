@@ -42,6 +42,111 @@ async function studioFetch(path: string): Promise<unknown> {
 }
 
 // ---------------------------------------------------------------------------
+// Contribution Nudges & Templates
+// ---------------------------------------------------------------------------
+
+const STUDIO_CONTRIBUTE_URL = "https://studio.relationaltechproject.org/library";
+
+const CONTRIBUTION_NUDGE_PATTERNS = `\n\n---\n\n## The Studio Grows When You Share\n\nIf you build something from these patterns — or discover something that works in your neighborhood — the Studio commons gets richer when you share it back. You can contribute a tool, story, or community note at ${STUDIO_CONTRIBUTE_URL}\n\nYour AI tool can also help you draft a contribution: just say **"I'd like to contribute what I'm building back to the Studio"** and it will walk you through it.`;
+
+const CONTRIBUTION_NUDGE_STORIES = `\n\n---\n\n## Got a Story?\n\nEvery story above started as one builder trying something in their neighborhood. If you're building something — or have already — your experience could help the next builder in the next neighborhood. Contribute at ${STUDIO_CONTRIBUTE_URL} or ask your AI: **"Help me share my story with the Studio."**`;
+
+const CONTRIBUTION_NUDGE_TOOL = `\n\n---\n\n## Remixed This Tool?\n\nIf you adapt this for your neighborhood, the Studio would love to know what you changed and why. Contribute at ${STUDIO_CONTRIBUTE_URL} or ask your AI: **"Help me contribute my remix back to the Studio."**`;
+
+const CONTRIBUTION_TEMPLATES: Record<string, string> = {
+  tool: `# Contributing a Tool to the Studio
+
+Thanks for wanting to share what you've built! Here's what would help other builders learn from your work.
+
+## What the Studio Needs
+
+Help the builder share these pieces (in conversation, not as a form):
+
+1. **Tool name** — What do you call it? (Can be a working title)
+2. **One-line description** — What does it do, in plain language?
+3. **The neighborhood context** — Where was this built? What was the need that sparked it?
+4. **How it works** — What does a neighbor experience when they use it? Walk through the flow.
+5. **What you'd tell another builder** — If someone in a different neighborhood wanted to build something similar, what would you want them to know? What surprised you? What would you do differently?
+6. **Category** — Which fits best: Connection & Stories, Events & Gatherings, Resource Sharing, Communication, Neighborhood Sites, Civic Organizations, Mutual Aid, or Community Funding?
+7. **URL** — Is it live somewhere? (Optional but helpful)
+8. **Your name and neighborhood** — How should we credit you?
+
+## How to Submit
+
+Once you've gathered this through conversation, the builder can contribute directly at ${STUDIO_CONTRIBUTE_URL} — they can create an account and add their tool to the commons.
+
+## Reminders for the AI
+
+- Draw this out conversationally — don't dump all questions at once
+- The builder's voice matters more than polish. Capture how *they* describe it.
+- If the builder has a prompt they used to build it, that's gold — include it
+- "What would you tell another builder" is the most important question`,
+
+  story: `# Contributing a Builder Story to the Studio
+
+The Studio's stories are its heartbeat — real accounts of what happened when someone tried something in their neighborhood.
+
+## What Makes a Good Studio Story
+
+Help the builder share their experience naturally. The best stories include:
+
+1. **The starting condition** — What was the neighborhood like? What did you notice or feel?
+2. **The spark** — What made you decide to do something about it?
+3. **What you actually did** — Not the theory, the reality. What happened first? Then what?
+4. **The surprises** — What worked that you didn't expect? What didn't work?
+5. **The relationships** — How did this change how you relate to your neighbors? How do they relate to each other?
+6. **What you'd say to someone starting** — Your honest advice.
+7. **Your name and place** — How should we credit you?
+
+## Story Length
+
+Studio stories range from a short paragraph to a full narrative. Both are valuable. Let the builder decide what feels right.
+
+## How to Submit
+
+The builder can contribute directly at ${STUDIO_CONTRIBUTE_URL} — create an account and add their story to the commons.
+
+## Reminders for the AI
+
+- Let the builder tell it in their own voice — don't over-edit
+- Ask follow-up questions that draw out specifics ("What happened next?" "How did that feel?")
+- The best Studio stories are honest about what didn't work, not just what did
+- Short is fine. A 3-sentence story that captures something real is better than a polished essay`,
+
+  community_note: `# Adding a Community Note to a Studio Tool
+
+Community notes are practical wisdom from builders who've used a tool — tips, gotchas, adaptations, and encouragement.
+
+## What Makes a Good Community Note
+
+1. **Which tool** — What existing Studio tool are you adding a note to?
+2. **Your experience** — How did you use it? What neighborhood? What context?
+3. **The note itself** — What would you want another builder to know? Tips, warnings, adaptations, encouragement.
+4. **Your name** — For credit (first name and neighborhood is enough)
+
+## Example Community Notes
+
+- "We used the Neighborhood Calendar prompt in a rural town of 800 people. The biggest adaptation: we added a 'rides needed/offered' field to every event since not everyone drives. — Maria, Greenfield MA"
+- "If you're building the Connector Site for a neighborhood with lots of non-English speakers, start the groups directory in multiple languages from day one. Retrofitting is much harder. — Kenji, Japantown SF"
+
+## How to Submit
+
+The builder can add community notes directly at ${STUDIO_CONTRIBUTE_URL} — find the tool and add a note.`,
+
+  unsure: `# Contributing to the Studio Commons
+
+Not sure what kind of contribution fits? Here's a quick guide:
+
+- **Built a tool or remixed one?** → Share it as a Tool contribution
+- **Have a story about what happened in your neighborhood?** → Share it as a Builder Story
+- **Used an existing Studio tool and have advice?** → Add a Community Note
+
+Ask the builder to describe what they've been working on or experiencing, and help them figure out which type fits. It's also fine to contribute more than one thing!
+
+All contributions can be made at ${STUDIO_CONTRIBUTE_URL} — create an account to get started.`,
+};
+
+// ---------------------------------------------------------------------------
 // Embedded Knowledge — Core Frameworks & Principles
 // ---------------------------------------------------------------------------
 
@@ -538,7 +643,9 @@ Use this to find relevant patterns, tools, and inspiration for a builder's speci
           }
         }
 
-        return { content: [{ type: "text" as const, text: results.join("\n") }] };
+        // Append contribution nudge when stories are included
+        const nudge = include_stories ? CONTRIBUTION_NUDGE_STORIES : "";
+        return { content: [{ type: "text" as const, text: results.join("\n") + nudge }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: `Error querying Studio library: ${error instanceof Error ? error.message : String(error)}` }],
@@ -606,7 +713,7 @@ including community notes, linked prompts, and usage guidance.`,
           }
         }
 
-        return { content: [{ type: "text" as const, text: results.join("\n") }] };
+        return { content: [{ type: "text" as const, text: results.join("\n") + CONTRIBUTION_NUDGE_TOOL }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: `Error fetching tool details: ${error instanceof Error ? error.message : String(error)}` }],
@@ -694,7 +801,53 @@ live Studio library.`,
         results.push(`\n(Could not reach Studio library: ${error instanceof Error ? error.message : String(error)})`);
       }
 
-      return { content: [{ type: "text" as const, text: results.join("\n") }] };
+      return { content: [{ type: "text" as const, text: results.join("\n") + CONTRIBUTION_NUDGE_PATTERNS }] };
+    }
+  );
+
+  // -------------------------------------------------------------------------
+  // suggest-contribution — Help builders share back to the commons
+  // -------------------------------------------------------------------------
+
+  s.tool(
+    "suggest-contribution",
+    `Help a builder shape their experience into a contribution for the RT Studio commons. Call this when a builder wants to share a tool they built, a story from their neighborhood, or a community note about an existing tool. Returns a guided framework the AI can use to help the builder draft their contribution conversationally.`,
+    {
+      contribution_type: z.enum(["tool", "story", "community_note", "unsure"]).describe(
+        "What the builder wants to contribute: a new tool/remix, a builder story, " +
+        "a community note on an existing tool, or 'unsure' if they're not sure yet"
+      ),
+      context: z.string().describe(
+        "What the builder has shared so far about what they built, experienced, or learned"
+      ),
+      neighborhood: z.string().optional().describe(
+        "The builder's neighborhood or place, if known"
+      ),
+      builder_name: z.string().optional().describe(
+        "The builder's first name, if they've shared it"
+      ),
+    },
+    async ({ contribution_type, context, neighborhood, builder_name }) => {
+      const template = CONTRIBUTION_TEMPLATES[contribution_type] || CONTRIBUTION_TEMPLATES.unsure;
+
+      const header = [
+        `# Ready to Contribute`,
+        ``,
+        builder_name ? `Builder: ${builder_name}` : "",
+        neighborhood ? `Neighborhood: ${neighborhood}` : "",
+        ``,
+        `What you've shared so far: ${context}`,
+        ``,
+        `---`,
+        ``,
+      ].filter(Boolean).join("\n");
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: header + template,
+        }],
+      };
     }
   );
 }
