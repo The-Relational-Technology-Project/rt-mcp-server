@@ -1311,17 +1311,153 @@ async function startHTTP() {
     if (url.pathname === "/") {
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end(`<!DOCTYPE html>
-<html><head><title>RTP Relational Tech MCP Server</title></head>
-<body style="font-family:system-ui;max-width:600px;margin:4rem auto;padding:0 1rem">
-<h1>RTP Relational Tech MCP Server</h1>
-<p><em>"We are a river, carrying stories, tools, learning, and relationships
-across many local gardens."</em></p>
-<p>This is an MCP server for the <a href="https://relationaltechproject.org">Relational Tech Project</a>.
-Connect your AI tool to <code>${req.headers.host}/mcp</code> to get started.</p>
-<p><a href="https://github.com/The-Relational-Technology-Project/local-rt-mcp-server">GitHub</a>
-&middot; <a href="https://studio.relationaltechproject.org">Studio</a>
-&middot; <a href="/health">Health Check</a></p>
-</body></html>`);
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relational Tech MCP Server</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --color-bg: hsl(30, 40%, 92%);
+    --color-surface: hsl(30, 45%, 96%);
+    --color-text: hsl(20, 30%, 22%);
+    --color-text-secondary: hsl(20, 25%, 48%);
+    --color-accent: hsl(16, 55%, 50%);
+    --color-accent-hover: hsl(14, 60%, 55%);
+    --color-border: hsl(28, 25%, 82%);
+    --color-tag-bg: hsl(28, 35%, 85%);
+    --font-heading: 'Fraunces', Georgia, serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --max-width: 900px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--color-text);
+    background: var(--color-bg);
+    min-height: 100vh;
+  }
+  .container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 3rem 1.5rem;
+  }
+  @media (min-width: 768px) {
+    .container { padding: 4rem 3rem; }
+  }
+  h1 {
+    font-family: var(--font-heading);
+    font-weight: 900;
+    font-size: 2.4rem;
+    line-height: 1.15;
+    color: var(--color-text);
+    margin-bottom: 0.5rem;
+  }
+  .subtitle {
+    color: var(--color-text-secondary);
+    font-size: 1.05rem;
+    margin-bottom: 2rem;
+  }
+  .quote {
+    font-family: var(--font-heading);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 1.1rem;
+    color: var(--color-text-secondary);
+    border-left: 3px solid var(--color-accent);
+    padding: 0.75rem 1.25rem;
+    margin: 2rem 0;
+    background: var(--color-surface);
+    border-radius: 0 12px 12px 0;
+  }
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    padding: 1.5rem 1.75rem;
+    margin: 1.5rem 0;
+  }
+  .card p {
+    margin-bottom: 0.75rem;
+  }
+  .card p:last-child { margin-bottom: 0; }
+  code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.9em;
+    background: hsl(20, 25%, 16%);
+    color: hsl(30, 45%, 92%);
+    padding: 0.2em 0.5em;
+    border-radius: 6px;
+  }
+  a {
+    color: var(--color-accent);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  a:hover {
+    color: var(--color-accent-hover);
+    text-decoration: underline;
+  }
+  nav {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+  }
+  nav a {
+    display: inline-block;
+    padding: 0.5rem 1.1rem;
+    background: var(--color-tag-bg);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--color-text);
+    transition: background 0.15s, color 0.15s;
+  }
+  nav a:hover {
+    background: var(--color-accent);
+    color: white;
+    text-decoration: none;
+  }
+  footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Relational Tech MCP Server</h1>
+  <p class="subtitle">Connect your AI tools to the relational tech ecosystem</p>
+
+  <div class="quote">"We are a river, carrying stories, tools, learning, and relationships across many local gardens."</div>
+
+  <div class="card">
+    <p>This is an MCP server for the <a href="https://relationaltechproject.org">Relational Tech Project</a>. It gives AI tools access to the Studio library, network updates, builder guides, and pattern-matching resources.</p>
+    <p>Connect your AI tool to <code>${req.headers.host}/mcp</code> to get started.</p>
+  </div>
+
+  <nav>
+    <a href="https://github.com/The-Relational-Technology-Project/rt-mcp-server">GitHub</a>
+    <a href="https://studio.relationaltechproject.org">Studio</a>
+    <a href="https://updates.relationaltechproject.org">Network Updates</a>
+    <a href="/health">Health Check</a>
+  </nav>
+
+  <footer>
+    Part of the <a href="https://relationaltechproject.org">Relational Tech Project</a>
+  </footer>
+</div>
+</body>
+</html>`);
       return;
     }
 
