@@ -160,3 +160,8 @@ MIT — use freely, remix generously, tend your garden.
 ---
 
 *Made by the [Relational Tech Project](https://relationaltechproject.org) · [Studio](https://studio.relationaltechproject.org) · hello@relationaltechproject.org*
+
+## Builder
+
+Josh Nesbit – co-founder of Relational Tech Project, building with neighbors in the Outer Sunset in SF.
+Reach me by email: josh@relationaltechproject.org
