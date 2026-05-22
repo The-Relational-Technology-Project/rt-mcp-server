@@ -4,7 +4,12 @@
  * RTP Relational Tech MCP Server
  *
  * An MCP server that carries relational tech principles, patterns, and the
- * Studio library to any AI builder tool. Built by the Relational Tech Project.
+ * shared commons library to any AI builder tool. Built by the Relational
+ * Tech Project.
+ *
+ * Data source: the RTP shared commons (commons_items table on the RTP main
+ * site Supabase project). Methodology docs, frameworks, recipes, references,
+ * tools, stories, and prompts all live in one queryable table.
  *
  * Supports two transport modes:
  *   - stdio (default): For local use with Claude Code, Cursor, etc.
@@ -23,21 +28,46 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
-// Studio API Configuration
+// Commons API Configuration
 // ---------------------------------------------------------------------------
 
-const SUPABASE_URL = "https://ivrvpbqidysrwqrthpcp.supabase.co/rest/v1";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2cnZwYnFpZHlzcndxcnRocGNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk4NzQ4NDQsImV4cCI6MjA3NTQ1MDg0NH0.fBKxzaiUspapVYq7xT60EHHVgWR-DcolUW2Cy90GHHc";
+const COMMONS_URL =
+  process.env.RTP_COMMONS_URL ??
+  "https://odowkowcinyoxejyzhwl.supabase.co/rest/v1";
 
-async function studioFetch(path: string): Promise<unknown> {
-  const res = await fetch(`${SUPABASE_URL}${path}`, {
+const COMMONS_ANON_KEY =
+  process.env.RTP_COMMONS_ANON_KEY ??
+  // Anon key for the RTP main site Supabase project (odowkowcinyoxejyzhwl).
+  // Anon keys are public by design — security comes from Postgres RLS policies.
+  // Override via env if the project is ever rotated.
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9kb3drb3djaW55b3hlanl6aHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2OTE5MzksImV4cCI6MjA3MDI2NzkzOX0.2Y2Dw66ORJ5DyBA11H5ziNFtdH1dG9BcOmFWYSicTSc";
+
+async function commonsFetch(path: string): Promise<unknown> {
+  const res = await fetch(`${COMMONS_URL}${path}`, {
     headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      apikey: COMMONS_ANON_KEY,
+      Authorization: `Bearer ${COMMONS_ANON_KEY}`,
     },
   });
-  if (!res.ok) throw new Error(`Studio API error: ${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    throw new Error(`Commons API error: ${res.status} ${res.statusText} — ${path}`);
+  }
+  return res.json();
+}
+
+async function commonsRpc(fn: string, body: Record<string, unknown>): Promise<unknown> {
+  const res = await fetch(`${COMMONS_URL}/rpc/${fn}`, {
+    method: "POST",
+    headers: {
+      apikey: COMMONS_ANON_KEY,
+      Authorization: `Bearer ${COMMONS_ANON_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`Commons RPC error: ${res.status} ${res.statusText} — ${fn}`);
+  }
   return res.json();
 }
 
@@ -47,18 +77,18 @@ async function studioFetch(path: string): Promise<unknown> {
 
 const STUDIO_CONTRIBUTE_URL = "https://studio.relationaltechproject.org/library";
 
-const CONTRIBUTION_NUDGE_PATTERNS = `\n\n---\n\n## The Studio Grows When You Share\n\nIf you build something from these patterns — or discover something that works in your neighborhood — the Studio commons gets richer when you share it back. You can contribute a tool, story, or community note at ${STUDIO_CONTRIBUTE_URL}\n\nYour AI tool can also help you draft a contribution: just say **"I'd like to contribute what I'm building back to the Studio"** and it will walk you through it.`;
+const CONTRIBUTION_NUDGE_PATTERNS = `\n\n---\n\n## The Commons Grows When You Share\n\nIf you build something from these patterns — or discover something that works in your neighborhood — the commons gets richer when you share it back. You can contribute a tool, story, or community note at ${STUDIO_CONTRIBUTE_URL}\n\nYour AI tool can also help you draft a contribution: just say **"I'd like to contribute what I'm building back to the commons"** and it will walk you through it.`;
 
-const CONTRIBUTION_NUDGE_STORIES = `\n\n---\n\n## Got a Story?\n\nEvery story above started as one builder trying something in their neighborhood. If you're building something — or have already — your experience could help the next builder in the next neighborhood. Contribute at ${STUDIO_CONTRIBUTE_URL} or ask your AI: **"Help me share my story with the Studio."**`;
+const CONTRIBUTION_NUDGE_STORIES = `\n\n---\n\n## Got a Story?\n\nEvery story above started as one builder trying something in their neighborhood. If you're building something — or have already — your experience could help the next builder in the next neighborhood. Contribute at ${STUDIO_CONTRIBUTE_URL} or ask your AI: **"Help me share my story with the commons."**`;
 
-const CONTRIBUTION_NUDGE_TOOL = `\n\n---\n\n## Remixed This Tool?\n\nIf you adapt this for your neighborhood, the Studio would love to know what you changed and why. Contribute at ${STUDIO_CONTRIBUTE_URL} or ask your AI: **"Help me contribute my remix back to the Studio."**`;
+const CONTRIBUTION_NUDGE_TOOL = `\n\n---\n\n## Remixed This Tool?\n\nIf you adapt this for your neighborhood, the commons would love to know what you changed and why. Contribute at ${STUDIO_CONTRIBUTE_URL} or ask your AI: **"Help me contribute my remix back to the commons."**`;
 
 const CONTRIBUTION_TEMPLATES: Record<string, string> = {
-  tool: `# Contributing a Tool to the Studio
+  tool: `# Contributing a Tool to the Commons
 
 Thanks for wanting to share what you've built! Here's what would help other builders learn from your work.
 
-## What the Studio Needs
+## What the Commons Needs
 
 Help the builder share these pieces (in conversation, not as a form):
 
@@ -82,11 +112,11 @@ Once you've gathered this through conversation, the builder can contribute direc
 - If the builder has a prompt they used to build it, that's gold — include it
 - "What would you tell another builder" is the most important question`,
 
-  story: `# Contributing a Builder Story to the Studio
+  story: `# Contributing a Builder Story to the Commons
 
-The Studio's stories are its heartbeat — real accounts of what happened when someone tried something in their neighborhood.
+The commons's stories are its heartbeat — real accounts of what happened when someone tried something in their neighborhood.
 
-## What Makes a Good Studio Story
+## What Makes a Good Story
 
 Help the builder share their experience naturally. The best stories include:
 
@@ -100,7 +130,7 @@ Help the builder share their experience naturally. The best stories include:
 
 ## Story Length
 
-Studio stories range from a short paragraph to a full narrative. Both are valuable. Let the builder decide what feels right.
+Stories range from a short paragraph to a full narrative. Both are valuable. Let the builder decide what feels right.
 
 ## How to Submit
 
@@ -110,16 +140,16 @@ The builder can contribute directly at ${STUDIO_CONTRIBUTE_URL} — create an ac
 
 - Let the builder tell it in their own voice — don't over-edit
 - Ask follow-up questions that draw out specifics ("What happened next?" "How did that feel?")
-- The best Studio stories are honest about what didn't work, not just what did
+- The best stories are honest about what didn't work, not just what did
 - Short is fine. A 3-sentence story that captures something real is better than a polished essay`,
 
-  community_note: `# Adding a Community Note to a Studio Tool
+  community_note: `# Adding a Community Note to a Commons Item
 
-Community notes are practical wisdom from builders who've used a tool — tips, gotchas, adaptations, and encouragement.
+Community notes are practical wisdom from builders who've used a tool or tried a practice — tips, gotchas, adaptations, and encouragement.
 
 ## What Makes a Good Community Note
 
-1. **Which tool** — What existing Studio tool are you adding a note to?
+1. **Which item** — What existing tool, story, or recipe are you adding a note to?
 2. **Your experience** — How did you use it? What neighborhood? What context?
 3. **The note itself** — What would you want another builder to know? Tips, warnings, adaptations, encouragement.
 4. **Your name** — For credit (first name and neighborhood is enough)
@@ -131,15 +161,16 @@ Community notes are practical wisdom from builders who've used a tool — tips, 
 
 ## How to Submit
 
-The builder can add community notes directly at ${STUDIO_CONTRIBUTE_URL} — find the tool and add a note.`,
+The builder can add community notes directly at ${STUDIO_CONTRIBUTE_URL} — find the item and add a note.`,
 
-  unsure: `# Contributing to the Studio Commons
+  unsure: `# Contributing to the Commons
 
 Not sure what kind of contribution fits? Here's a quick guide:
 
 - **Built a tool or remixed one?** → Share it as a Tool contribution
 - **Have a story about what happened in your neighborhood?** → Share it as a Builder Story
-- **Used an existing Studio tool and have advice?** → Add a Community Note
+- **Used an existing item and have advice?** → Add a Community Note
+- **Documented a neighborhood practice that isn't in the commons yet?** → That's a Recipe — share it!
 
 Ask the builder to describe what they've been working on or experiencing, and help them figure out which type fits. It's also fine to contribute more than one thing!
 
@@ -147,588 +178,295 @@ All contributions can be made at ${STUDIO_CONTRIBUTE_URL} — create an account 
 };
 
 // ---------------------------------------------------------------------------
-// Embedded Knowledge — Core Frameworks & Principles
+// Helpers — format commons_items rows as markdown
 // ---------------------------------------------------------------------------
 
-const CORE_PRINCIPLES = `# RTP Core Principles
-
-## Technology Built By and Accountable To the People It Serves
-RTP's origin principle. Technology is a means, not an end. The people closest
-to the work should shape the tools.
-
-## The River, Not the Gardener
-RTP provides scalable infrastructure while respecting local autonomy. Like a
-river that nourishes many gardens without dictating what grows, RTP creates
-conditions for community life to flourish on its own terms. Builders don't
-need permission; they need pathways.
-
-## Relationships First, Tools Second
-The strongest community infrastructure is built on trust, not technology.
-Digital tools should amplify existing relationships and create conditions for
-new ones — never replace face-to-face connection.
-
-## Asset-Based Approach
-Every neighborhood already has what it needs to begin. Start by mapping what
-exists — people, skills, spaces, traditions, informal networks — rather than
-cataloging deficits.
-
-## Speed of Trust
-Community building unfolds at the pace of human relationships. Resist the urge
-to scale before depth is established. Deep roots in one block are worth more
-than shallow presence across a city.`;
-
-const RELATIONAL_TECH_PRACTICE = `# A Relational Tech Practice
-
-Relational tech is a practice with four dimensions:
-
-## 1. Purpose
-Reconnect with people and the place where we live, cultivating healthy
-relational soil — the conditions in which agency, belonging, and trust
-can grow.
-
-## 2. Process: Embedded Design
-Spend less time building in isolation and more time in the messiness and
-beauty of community life. Dreams emerge from accountable relationships,
-time spent in the world together, and local needs identified through deep
-listening. The result is small, meaningful software that fits its community.
-
-## 3. Math: 1:100
-Fewer "users," more co-creators. One primary builder to 100 neighbors who
-rely on and co-create the tools. This reflects the emerging profession of
-"local relational technologist" — people who practice their craft in service
-of place.
-
-## 4. Path: Scale Deep, Spread Horizontal
-Scale deep in place and spread horizontally, neighborhood to neighborhood,
-through remixing rather than replication. Each place carries its own histories,
-wounds, wisdom, and gifts. Relational technology is crafted locally, through
-attunement and shared discernment.`;
-
-const THREE_LAYERS = `# Three Layers of Neighborhood Infrastructure
-
-## Layer 1: Relational Layer (Foundation)
-Who knows whom? Where does trust live? This is the bedrock.
-Most builders want to skip to Layer 2, but the strongest infrastructure
-builds this layer first.
-
-## Layer 2: Information Layer
-How do people learn what's happening? Calendars, channels, newsletters,
-directories — the connective tissue of neighborhood awareness.
-
-## Layer 3: Action Layer
-How do people help each other? Mutual aid, shared resources, collective
-projects, tool libraries, cooperative care.
-
-## The Outer Sunset Ecosystem (Reference Implementation)
-
-### Neighborhood Scale (Public)
-- Outer Sunset Today — Community calendar & daily digest (outersunset.today)
-- Community Guide — Directory of local groups (outersunset.us)
-- Field Guide — Walking exploration app with past/present/future (outersunset.place)
-
-### Block Scale (Semi-Public)
-- Cozy Corner — 48th Ave block hub for events, ideas, links (cozycorner.place)
-- Community Supplies — Tool, gear & book lending library (communitysupplies.org)
-- Block Party Planner — Event coordination
-- Flyer Map Maker — Design tool for outreach
-
-### Private Channels (Invite-Only)
-- Mutual Aid Pod (25 members)
-- Block Neighbors (35 members)
-- Affinity groups (parents, etc.)
-
-These three scales — neighborhood, block, private — form a pattern that can
-be adapted to any place.`;
-
-const BUILDER_SPECTRUM = `# The Builder Spectrum
-
-People come to community building at different stages. Meet builders where
-they are, not where you wish they were.
-
-## Curious
-"I wish my neighborhood felt more connected."
-→ Join existing local channels. Don't build yet. Listen.
-
-## Experimenting
-"I started a group chat / hosted a gathering."
-→ WhatsApp group + shared Google Calendar. Keep it simple.
-
-## Building
-"I'm setting up systems and recruiting co-builders."
-→ Newsletter + calendar + one action channel. Find co-builders.
-
-## Sustaining
-"How do I keep this going without burning out?"
-→ Field guide + signals + mutual aid structure. Rotate roles.
-
-## Scaling
-"How do I share what's working with other neighborhoods?"
-→ Studio platform + cross-neighborhood connections. Document and remix.`;
-
-const MEASUREMENT_FRAMEWORK = `# Measuring What Matters: Agency, Belonging, Trust
-
-Relational tech isn't measured by users or engagement metrics. It's measured
-by what grows in the soil it helps cultivate.
-
-## Agency
-People experience themselves as capable stewards of their community.
-- How many people are building relational tech?
-- What are their stories of capability and action?
-- Are people solving local problems with local tools?
-
-## Belonging
-People feel that they — and their dreams and gifts — matter where they live.
-- Are people co-creating tools together?
-- Do builders report their own sense of belonging changing?
-- Are diverse voices and perspectives present?
-
-## Trust
-People feel motivated to engage in generalized reciprocity and shared care.
-- Are relational tech tools helping people connect more deeply?
-- Are neighbors engaging in mutual aid and shared care?
-- Is trust growing across difference, not just within groups?
-
-These three outcomes reinforce each other. Agency without belonging becomes
-isolation. Belonging without trust becomes a bubble. Trust without agency
-becomes dependence.`;
-
-const EMBEDDED_DESIGN_GUIDE = `# Embedded Design: A Guide for Builders
-
-Embedded design is RTP's core methodology for building relational tech.
-It inverts the typical software development process.
-
-## The Inversion
-Traditional: Identify problem → Design solution → Build → Ship → Get users
-Embedded:    Be in community → Notice what's needed → Build with neighbors →
-             Iterate together → Tool earns its place
-
-## Before You Build Anything
-1. Spend time in the place. Walk the neighborhood. Go to events. Be a
-   neighbor first, a builder second.
-2. Listen for recurring themes. What do people wish existed? What's hard?
-   What's beautiful?
-3. Map what already exists. There are always existing assets — people,
-   spaces, channels, traditions. Build on these, don't replace them.
-4. Find co-builders. If you can't find at least one person who wants to
-   build this with you, you might be solving the wrong problem.
-
-## While You Build
-1. Build the smallest useful thing. Not an MVP — a "minimum relational
-   thing." Something that creates one connection that didn't exist before.
-2. Test with real neighbors, not personas. The people on your block, at
-   your café, in your group chat. Real feedback from real relationships.
-3. Let the tool earn its place. Don't promote it. Let it spread through
-   the relationships it serves. If people share it, it's working.
-4. Stay accountable. The 1:100 ratio means you know the people using what
-   you build. You see them at the store. This accountability is a feature.
-
-## Design Principles
-- Simple over feature-rich
-- Accessible over sophisticated
-- Local over universal
-- Accountable over scalable
-- Open over proprietary
-- Remix over replicate
-
-## Common Mistakes
-- Building in isolation, then "launching" to the community
-- Optimizing for growth instead of depth
-- Adding features instead of deepening relationships
-- Assuming digital = better
-- Copying what worked elsewhere without local adaptation`;
-
-const PLAYBOOKS = `# Playbooks for Common Builder Needs
-
-## Start a Neighborhood Communication Channel
-1. Identify 5 anchor neighbors already informally connected
-2. Have 1-on-1 conversations first — don't just add people to a group
-3. Choose the simplest tool (WhatsApp, group text)
-4. Set the tone with the first message — introduce yourself, name a
-   specific purpose
-5. Seed early activity in the first 48 hours
-6. Invite gradually — 2-3 people per week
-7. Establish norms by modeling the behavior you want to see
-
-Pitfalls: Starting too big, not setting norms, builder doing all the posting.
-
-## Host a First Gathering
-1. Low-barrier format — coffee on the sidewalk, potluck, porch hangout
-2. Choose a time that works for your street's rhythm
-3. Invite personally — door knocks, hand-written notes, texts
-4. Have a simple prompt ("What do you love about living here?")
-5. Show up 15 minutes early
-6. Capture contact info
-7. Follow up within 48 hours
-8. Name the next gathering before people leave
-
-Pitfalls: Too formal, no follow-up, waiting for perfect conditions.
-
-## Launch a Neighborhood Calendar
-1. Audit what exists (bulletin boards, Facebook groups, word of mouth)
-2. Start a shared Google Calendar
-3. Seed with 10-15 events (recurring + one-time)
-4. Recruit 2-3 co-curators (café owners, librarians, PTA parents)
-5. Share widely through existing channels
-6. Consider automation for scraping event sources
-7. Keep it alive — update weekly
-
-Scaling: Calendar → Weekly digest → Custom alerts (Sunset Signals model).
-
-## Build a Mutual Aid Pod
-1. Start with existing trust — don't organize strangers into a pod
-2. Keep it small (5-15 households)
-3. Define what kinds of help you'll share
-4. Dedicated communication channel
-5. Weekly check-in rhythm
-6. Rotate coordination monthly
-7. Practice before crisis with small exchanges
-
-Pitfalls: One-directional giving, no practice, too formal.
-
-## Map Neighborhood Assets
-1. Physically walk every block
-2. Talk to 10 people ("Who should everyone know?" "Where do people gather?")
-3. Map people, places, and organizations
-4. Look for connection gaps between existing assets
-5. Share what you find — even rough lists create immediate value
-
-## The Builder Loop (Meta-Pattern)
-Listen → Connect → Build → Reflect → Adapt → Share → Repeat
-This is not a project with an end date; it's a practice.`;
-
-const CHALLENGES_GUIDE = `# Navigating Common Challenges
-
-## Trust Building
-Show up consistently. Start with listening. Be transparent about intentions.
-Deliver on small promises. Bridge across difference — the hardest trust to
-build is often the most valuable.
-Red flags: Rushing to organize before relationships exist. Assuming digital
-connection equals trust.
-
-## Burnout & Sustainability
-Co-build from day one. Rotate roles. Set boundaries. Celebrate small wins.
-Rest is not failure — if things stop when you rest, the infrastructure wasn't
-sustainable.
-Red flags: "I'll just do it myself." Checking group chats constantly. Guilt
-about time off.
-
-## Scale & Complexity
-Deepen before you widen. Use the pod model (5-15 people with bridges between
-groups). Layer your channels. Delegate whole domains, not just tasks. Accept
-messiness — the "river, not the gardener" means letting go.
-
-## Digital Literacy & Access
-Always maintain an analog channel. Choose lowest-barrier tools. Offer gentle
-onboarding. Design for phones. Translate if multilingual.
-Red flags: Assuming "everyone is on WhatsApp." English-only defaults.
-
-## Language & Cultural Barriers
-Learn the landscape. Find bridge-builders who move between communities.
-Translate key infrastructure. Respect different organizing traditions.
-Show up at their events before inviting them to yours.
-
-## Conflict & Disagreement
-Normalize disagreement. Create structured spaces for hard conversations.
-Focus on shared interests. Don't take sides as a builder. Know when to
-step back and refer to mediation.
-
-## Maintaining Momentum
-Rhythm over events. Rituals matter. Regularly invite new people. Evolve
-the offering. Celebrate milestones.`;
-
-const NETWORK_AND_COMMUNITY = `# Network & Community Connections
-
-## The RTP Network
-- RTP Studio: Structured learning platform with cohort-based curriculum.
-  Best for builders at "Building" or "Sustaining" stage.
-  URL: studio.relationaltechproject.org
-- Civic Label Network: 50+ cross-sector civic practitioners. Cooperative
-  model that reframes civic culture workers as artists deserving collective
-  backing.
-
-## Connection Patterns for Builders
-
-### New Builders
-- Find your local equivalent — every neighborhood has informal connectors
-- Join before you build — participate in existing groups for a month first
-- Look for adjacent builders in nearby neighborhoods
-
-### Established Builders
-- Document and share what's working
-- Host a visiting builder from another neighborhood
-- Contribute patterns to the knowledge commons
-- Mentor a newer builder
-
-### Builders Feeling Isolated
-- You're not alone — this work is hard and invisible. That's normal.
-- Even one peer in another neighborhood is transformative
-- Join a cohort for structured peer connection
-- Lower the bar — scale back to one practice until energy returns
-
-## Adjacent Movements
-- Block club / block captain networks
-- Mutual aid networks (many formed during COVID, still active)
-- Code for America brigades and civic tech meetups
-- Community land trusts and cooperative housing
-- Restorative justice circles
-- Time banks and skill shares`;
+interface CommonsItem {
+  id: string;
+  slug: string;
+  kind: string;
+  title: string;
+  summary: string | null;
+  body: string | null;
+  attribution: Record<string, unknown>;
+  source_studio_slug: string | null;
+  source_url: string | null;
+  tags: string[];
+  parent_slug: string | null;
+  metadata: Record<string, unknown>;
+}
+
+function formatItem(item: Partial<CommonsItem>, opts: { includeBody?: boolean } = {}): string {
+  const lines: string[] = [];
+  lines.push(`### ${item.title || "Untitled"}`);
+  if (item.kind) lines.push(`*${item.kind}*`);
+  if (item.summary) lines.push(`\n${item.summary}`);
+  if (opts.includeBody && item.body) {
+    lines.push(`\n${item.body}`);
+  }
+  if (item.tags && item.tags.length > 0) {
+    lines.push(`\n**Tags:** ${item.tags.join(", ")}`);
+  }
+  if (item.attribution && typeof item.attribution === "object") {
+    const attr = item.attribution as Record<string, unknown>;
+    const parts: string[] = [];
+    if (attr.name) parts.push(String(attr.name));
+    if (attr.neighborhood) parts.push(String(attr.neighborhood));
+    if (parts.length > 0) lines.push(`\n— ${parts.join(", ")}`);
+  }
+  if (item.source_url) {
+    lines.push(`\n[Source](${item.source_url})`);
+  }
+  if (item.source_studio_slug && item.source_studio_slug !== "rtp-canonical") {
+    lines.push(`\n*Contributed by ${item.source_studio_slug}*`);
+  }
+  return lines.join("\n");
+}
 
 // ---------------------------------------------------------------------------
 // Registration Functions
-// (Extracted so both stdio and per-session HTTP servers can use them)
 // ---------------------------------------------------------------------------
 
+// The 9 RTP methodology docs are exposed as MCP resources at stable URIs.
+// Their content is now fetched live from commons_items (kind='methodology').
+const METHODOLOGY_RESOURCES = [
+  { name: "core-principles",           uri: "rtp://knowledge/core-principles",          slug: "rtp-core-principles", description: "RTP's foundational principles: technology accountable to people, the river metaphor, relationships first, asset-based approach, speed of trust" },
+  { name: "relational-tech-practice",  uri: "rtp://knowledge/relational-tech-practice", slug: "a-relational-tech-practice", description: "The four dimensions of relational tech practice: purpose, process (embedded design), math (1:100), and path (scale deep, spread horizontal)" },
+  { name: "three-layers",              uri: "rtp://knowledge/three-layers",             slug: "three-layers-of-neighborhood-infrastructure", description: "Three layers of neighborhood infrastructure (relational, information, action) with the Outer Sunset ecosystem as reference implementation" },
+  { name: "builder-spectrum",          uri: "rtp://knowledge/builder-spectrum",         slug: "the-builder-spectrum", description: "The five stages of a community builder's journey: curious, experimenting, building, sustaining, scaling" },
+  { name: "measurement-framework",     uri: "rtp://knowledge/measurement",              slug: "measuring-what-matters-agency-belonging-trust", description: "How to measure relational outcomes: agency, belonging, and trust" },
+  { name: "embedded-design-guide",     uri: "rtp://knowledge/embedded-design",          slug: "embedded-design-a-guide-for-builders", description: "Complete guide to embedded design methodology: the inversion of traditional software development, principles, process, and common mistakes" },
+  { name: "playbooks",                 uri: "rtp://knowledge/playbooks",                slug: "playbooks-for-common-builder-needs", description: "Step-by-step playbooks for common builder needs: starting communication channels, hosting gatherings, launching calendars, mutual aid pods, asset mapping" },
+  { name: "challenges-guide",          uri: "rtp://knowledge/challenges",               slug: "navigating-common-challenges", description: "Guide to navigating common community building challenges: trust, burnout, scale, digital access, language barriers, conflict, momentum" },
+  { name: "network-and-community",     uri: "rtp://knowledge/network",                  slug: "network-community-connections", description: "RTP network connections, adjacent movements, and guidance for builders at every stage on finding peers and community" },
+];
+
+async function fetchMethodologyBySlug(slug: string): Promise<string> {
+  const rows = await commonsFetch(
+    `/commons_items?select=title,body&kind=eq.methodology&slug=eq.${encodeURIComponent(slug)}`
+  ) as Array<{ title: string; body: string }>;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return `# Not found\n\nMethodology doc "${slug}" not found in commons.`;
+  }
+  const { title, body } = rows[0];
+  return `# ${title}\n\n${body}`;
+}
+
 function registerResources(s: McpServer) {
-  s.resource(
-    "core-principles",
-    "rtp://knowledge/core-principles",
-    { description: "RTP's foundational principles: technology accountable to people, the river metaphor, relationships first, asset-based approach, speed of trust" },
-    () => ({ contents: [{ uri: "rtp://knowledge/core-principles", text: CORE_PRINCIPLES, mimeType: "text/markdown" }] })
-  );
-
-  s.resource(
-    "relational-tech-practice",
-    "rtp://knowledge/relational-tech-practice",
-    { description: "The four dimensions of relational tech practice: purpose, process (embedded design), math (1:100), and path (scale deep, spread horizontal)" },
-    () => ({ contents: [{ uri: "rtp://knowledge/relational-tech-practice", text: RELATIONAL_TECH_PRACTICE, mimeType: "text/markdown" }] })
-  );
-
-  s.resource(
-    "three-layers",
-    "rtp://knowledge/three-layers",
-    { description: "Three layers of neighborhood infrastructure (relational, information, action) with the Outer Sunset ecosystem as reference implementation" },
-    () => ({ contents: [{ uri: "rtp://knowledge/three-layers", text: THREE_LAYERS, mimeType: "text/markdown" }] })
-  );
-
-  s.resource(
-    "builder-spectrum",
-    "rtp://knowledge/builder-spectrum",
-    { description: "The five stages of a community builder's journey: curious, experimenting, building, sustaining, scaling — with guidance for each stage" },
-    () => ({ contents: [{ uri: "rtp://knowledge/builder-spectrum", text: BUILDER_SPECTRUM, mimeType: "text/markdown" }] })
-  );
-
-  s.resource(
-    "measurement-framework",
-    "rtp://knowledge/measurement",
-    { description: "How to measure relational outcomes: agency, belonging, and trust — the three things healthy relational soil cultivates" },
-    () => ({ contents: [{ uri: "rtp://knowledge/measurement", text: MEASUREMENT_FRAMEWORK, mimeType: "text/markdown" }] })
-  );
-
-  s.resource(
-    "embedded-design-guide",
-    "rtp://knowledge/embedded-design",
-    { description: "Complete guide to embedded design methodology: the inversion of traditional software development, principles, process, and common mistakes" },
-    () => ({ contents: [{ uri: "rtp://knowledge/embedded-design", text: EMBEDDED_DESIGN_GUIDE, mimeType: "text/markdown" }] })
-  );
-
-  s.resource(
-    "playbooks",
-    "rtp://knowledge/playbooks",
-    { description: "Step-by-step playbooks for common builder needs: starting communication channels, hosting gatherings, launching calendars, mutual aid pods, asset mapping" },
-    () => ({ contents: [{ uri: "rtp://knowledge/playbooks", text: PLAYBOOKS, mimeType: "text/markdown" }] })
-  );
-
-  s.resource(
-    "challenges-guide",
-    "rtp://knowledge/challenges",
-    { description: "Guide to navigating common community building challenges: trust, burnout, scale, digital access, language barriers, conflict, momentum" },
-    () => ({ contents: [{ uri: "rtp://knowledge/challenges", text: CHALLENGES_GUIDE, mimeType: "text/markdown" }] })
-  );
-
-  s.resource(
-    "network-and-community",
-    "rtp://knowledge/network",
-    { description: "RTP network connections, adjacent movements, and guidance for builders at every stage on finding peers and community" },
-    () => ({ contents: [{ uri: "rtp://knowledge/network", text: NETWORK_AND_COMMUNITY, mimeType: "text/markdown" }] })
-  );
+  for (const r of METHODOLOGY_RESOURCES) {
+    s.resource(
+      r.name,
+      r.uri,
+      { description: r.description },
+      async () => {
+        const text = await fetchMethodologyBySlug(r.slug);
+        return { contents: [{ uri: r.uri, text, mimeType: "text/markdown" }] };
+      }
+    );
+  }
 }
 
 function registerTools(s: McpServer) {
+  // -------------------------------------------------------------------------
+  // search-studio-library — search the commons (tools, stories, prompts,
+  // recipes, references — everything is in one queryable table now)
+  // -------------------------------------------------------------------------
+
   s.tool(
     "search-studio-library",
-    `Search the Relational Tech Studio library for tools, stories, and building resources.
-The Studio is a living, growing commons of relational tech — tools that builders
-have created, stories from real neighborhoods, and community notes with practical wisdom.
-Use this to find relevant patterns, tools, and inspiration for a builder's specific context.`,
+    `Search the Relational Tech commons — a unified library of tools that builders have created, stories from real neighborhoods, neighborhood recipes (block parties, mutual aid pods, etc.), and reference entries from the field.
+
+The commons is a living, growing resource. Use this to find relevant patterns, tools, and inspiration for a builder's specific context.`,
     {
+      query: z.string().optional().describe(
+        "Free-text search query (matches title, summary, tags, body). Leave empty to browse everything."
+      ),
+      kinds: z.array(z.enum(["tool", "story", "prompt", "recipe", "reference", "framework", "methodology"])).optional()
+        .describe("Restrict to specific kinds of items. Defaults to tool, story, prompt, recipe."),
       category: z.enum(["all", "relational_tech", "tech_for_building"]).default("all")
-        .describe("Filter by tool category: 'relational_tech' for community/connection tools, 'tech_for_building' for infrastructure tools, or 'all' for everything"),
-      include_stories: z.boolean().default(true)
-        .describe("Whether to also fetch real builder stories from the library"),
-      include_notes: z.boolean().default(true)
-        .describe("Whether to include community notes and tips on tools"),
+        .describe("Tool category filter — kept for backward compatibility. Use tags or kinds for richer filtering."),
+      limit: z.number().default(12).describe("Max results to return (max 30)"),
     },
-    async ({ category, include_stories, include_notes }) => {
-      const results: string[] = [];
+    async ({ query, kinds, category, limit }) => {
+      const cap = Math.min(Math.max(limit ?? 12, 1), 30);
+      const filterKinds = kinds && kinds.length > 0
+        ? kinds
+        : ["tool", "story", "prompt", "recipe"];
 
       try {
-        const toolFilter = category !== "all" ? `&tool_category=eq.${category}` : "";
-        const tools = await studioFetch(
-          `/tools?select=id,name,description,summary,tool_category,url${toolFilter}`
-        ) as Array<Record<string, unknown>>;
+        let items: Array<Partial<CommonsItem> & { rank?: number }> = [];
 
-        results.push("# Tools from the Studio Library\n");
-        if (Array.isArray(tools) && tools.length > 0) {
-          for (const tool of tools) {
-            results.push(`## ${tool.name || "Unnamed Tool"}`);
-            if (tool.summary) results.push(`${tool.summary}`);
-            if (tool.description) results.push(`${tool.description}`);
-            if (tool.tool_category) results.push(`Category: ${tool.tool_category}`);
-            if (tool.url) results.push(`URL: ${tool.url}`);
-            results.push("");
-          }
+        if (query && query.trim().length > 0) {
+          // Use full-text search RPC
+          const rpcResults = await commonsRpc("search_commons_items", {
+            query_text: query,
+            match_count: cap,
+            filter_kinds: filterKinds,
+          }) as Array<Partial<CommonsItem> & { rank?: number }>;
+          items = Array.isArray(rpcResults) ? rpcResults : [];
         } else {
-          results.push("No tools found for the given filter.\n");
+          // Browse — fetch top items per kind
+          const kindFilter = filterKinds.map((k) => `"${k}"`).join(",");
+          const rows = await commonsFetch(
+            `/commons_items?select=id,slug,kind,title,summary,attribution,source_studio_slug,source_url,tags,parent_slug&kind=in.(${kindFilter})&status=eq.canonical&order=sort_order.asc,created_at.desc&limit=${cap}`
+          ) as Array<Partial<CommonsItem>>;
+          items = Array.isArray(rows) ? rows : [];
         }
 
-        const prompts = await studioFetch(
-          `/prompts?select=title,description,example_prompt,category,parent_tool_id`
-        ) as Array<Record<string, unknown>>;
-
-        if (Array.isArray(prompts) && prompts.length > 0) {
-          results.push("\n# Tool Prompts & Usage Patterns\n");
-          for (const prompt of prompts) {
-            results.push(`## ${prompt.title || "Untitled Prompt"}`);
-            if (prompt.description) results.push(`${prompt.description}`);
-            if (prompt.example_prompt) results.push(`Example: ${prompt.example_prompt}`);
-            if (prompt.category) results.push(`Category: ${prompt.category}`);
-            results.push("");
-          }
+        // Optional category filter (only meaningful for tools; uses tags)
+        if (category !== "all") {
+          items = items.filter((it) => {
+            if (it.kind !== "tool") return true; // category filter is tool-only
+            return Array.isArray(it.tags) && it.tags.includes(category);
+          });
         }
 
-        if (include_stories) {
-          const stories = await studioFetch(
-            `/stories?select=title,story_text,full_story_text,attribution`
-          ) as Array<Record<string, unknown>>;
-
-          if (Array.isArray(stories) && stories.length > 0) {
-            results.push("\n# Builder Stories\n");
-            for (const story of stories) {
-              results.push(`## ${story.title || "Untitled Story"}`);
-              if (story.full_story_text) {
-                results.push(`${story.full_story_text}`);
-              } else if (story.story_text) {
-                results.push(`${story.story_text}`);
-              }
-              if (story.attribution) results.push(`— ${story.attribution}`);
-              results.push("");
-            }
-          }
-        }
-
-        if (include_notes) {
-          const toolNotes = await studioFetch(
-            `/tool_notes?select=note_text,author_name,tool_id`
-          ) as Array<Record<string, unknown>>;
-
-          if (Array.isArray(toolNotes) && toolNotes.length > 0) {
-            results.push("\n# Community Notes on Tools\n");
-            for (const note of toolNotes) {
-              results.push(`- ${note.note_text}`);
-              if (note.author_name) results.push(`  — ${note.author_name}`);
-            }
-            results.push("");
-          }
-
-          const storyNotes = await studioFetch(
-            `/story_notes?select=note_text,author_name,story_id`
-          ) as Array<Record<string, unknown>>;
-
-          if (Array.isArray(storyNotes) && storyNotes.length > 0) {
-            results.push("\n# Community Notes on Stories\n");
-            for (const note of storyNotes) {
-              results.push(`- ${note.note_text}`);
-              if (note.author_name) results.push(`  — ${note.author_name}`);
-            }
-          }
-        }
-
-        // Append contribution nudge when stories are included
-        const nudge = include_stories ? CONTRIBUTION_NUDGE_STORIES : "";
-        return { content: [{ type: "text" as const, text: results.join("\n") + nudge }] };
-      } catch (error) {
-        return {
-          content: [{ type: "text" as const, text: `Error querying Studio library: ${error instanceof Error ? error.message : String(error)}` }],
-          isError: true,
-        };
-      }
-    }
-  );
-
-  s.tool(
-    "get-tool-details",
-    `Get detailed information about a specific tool from the Studio library,
-including community notes, linked prompts, and usage guidance.`,
-    {
-      tool_name: z.string().describe("Name or partial name of the tool to look up"),
-    },
-    async ({ tool_name }) => {
-      try {
-        const tools = await studioFetch(
-          `/tools?select=id,name,description,summary,tool_category,url&name=ilike.*${encodeURIComponent(tool_name)}*`
-        ) as Array<Record<string, unknown>>;
-
-        if (!Array.isArray(tools) || tools.length === 0) {
+        if (items.length === 0) {
           return {
-            content: [{ type: "text" as const, text: `No tools found matching "${tool_name}". Try searching the full library with search-studio-library.` }],
+            content: [{
+              type: "text" as const,
+              text: `# Commons Search\n\nNo items found${query ? ` matching "${query}"` : ""} in kinds: ${filterKinds.join(", ")}.\n\nTry a broader query or different kinds.`
+            }],
           };
         }
 
-        const results: string[] = [];
+        // Group by kind for readability
+        const byKind: Record<string, typeof items> = {};
+        for (const item of items) {
+          const k = item.kind || "unknown";
+          if (!byKind[k]) byKind[k] = [];
+          byKind[k].push(item);
+        }
 
-        for (const tool of tools) {
-          results.push(`# ${tool.name}\n`);
-          if (tool.summary) results.push(`**Summary:** ${tool.summary}\n`);
-          if (tool.description) results.push(`${tool.description}\n`);
-          if (tool.tool_category) results.push(`**Category:** ${tool.tool_category}`);
-          if (tool.url) results.push(`**URL:** ${tool.url}`);
-          results.push("");
+        const lines: string[] = [];
+        lines.push(`# Commons Library\n`);
+        if (query) lines.push(`Search: "${query}"\n`);
+        lines.push(`${items.length} result${items.length === 1 ? "" : "s"} across ${Object.keys(byKind).length} kind${Object.keys(byKind).length === 1 ? "" : "s"}.\n`);
 
-          if (tool.id) {
-            const prompts = await studioFetch(
-              `/prompts?select=title,description,example_prompt,category&parent_tool_id=eq.${tool.id}`
-            ) as Array<Record<string, unknown>>;
+        const headings: Record<string, string> = {
+          tool: "Tools",
+          story: "Builder Stories",
+          prompt: "Prompts",
+          recipe: "Neighborhood Recipes",
+          reference: "Field References",
+          framework: "Frameworks",
+          methodology: "RTP Methodology",
+        };
 
-            if (Array.isArray(prompts) && prompts.length > 0) {
-              results.push("## Prompts & Usage Patterns\n");
-              for (const prompt of prompts) {
-                results.push(`### ${prompt.title || "Untitled"}`);
-                if (prompt.description) results.push(String(prompt.description));
-                if (prompt.example_prompt) results.push(`\nExample prompt: "${prompt.example_prompt}"`);
-                results.push("");
-              }
-            }
-
-            const notes = await studioFetch(
-              `/tool_notes?select=note_text,author_name&tool_id=eq.${tool.id}`
-            ) as Array<Record<string, unknown>>;
-
-            if (Array.isArray(notes) && notes.length > 0) {
-              results.push("## Community Notes\n");
-              for (const note of notes) {
-                results.push(`- ${note.note_text}`);
-                if (note.author_name) results.push(`  — ${note.author_name}`);
-              }
-            }
+        for (const kind of ["tool", "story", "prompt", "recipe", "framework", "reference", "methodology"]) {
+          if (!byKind[kind] || byKind[kind].length === 0) continue;
+          lines.push(`\n## ${headings[kind] || kind}\n`);
+          for (const item of byKind[kind]) {
+            lines.push(formatItem(item));
+            lines.push("");
           }
         }
 
-        return { content: [{ type: "text" as const, text: results.join("\n") + CONTRIBUTION_NUDGE_TOOL }] };
+        const includesStories = filterKinds.includes("story");
+        const nudge = includesStories ? CONTRIBUTION_NUDGE_STORIES : CONTRIBUTION_NUDGE_PATTERNS;
+        return { content: [{ type: "text" as const, text: lines.join("\n") + nudge }] };
       } catch (error) {
         return {
-          content: [{ type: "text" as const, text: `Error fetching tool details: ${error instanceof Error ? error.message : String(error)}` }],
+          content: [{ type: "text" as const, text: `Error querying commons: ${error instanceof Error ? error.message : String(error)}` }],
           isError: true,
         };
       }
     }
   );
 
+  // -------------------------------------------------------------------------
+  // get-tool-details — full details for a specific item from the commons
+  // -------------------------------------------------------------------------
+
+  s.tool(
+    "get-tool-details",
+    `Get detailed information about a specific item from the commons (tool, recipe, story, etc.), including full body, community notes, and linked items.`,
+    {
+      tool_name: z.string().describe("Name or partial name of the item to look up"),
+      kind: z.enum(["tool", "recipe", "story", "prompt", "framework", "methodology", "reference"]).optional()
+        .describe("Optional kind filter to disambiguate"),
+    },
+    async ({ tool_name, kind }) => {
+      try {
+        const needle = encodeURIComponent(`*${tool_name}*`);
+        const kindFilter = kind ? `&kind=eq.${kind}` : "";
+        const items = await commonsFetch(
+          `/commons_items?select=id,slug,kind,title,summary,body,attribution,source_studio_slug,source_url,tags,parent_slug,metadata&title=ilike.${needle}${kindFilter}&status=eq.canonical&limit=5`
+        ) as Array<Partial<CommonsItem>>;
+
+        if (!Array.isArray(items) || items.length === 0) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `No items found matching "${tool_name}"${kind ? ` (kind=${kind})` : ""}. Try search-studio-library for broader exploration.`,
+            }],
+          };
+        }
+
+        const lines: string[] = [];
+        for (const item of items) {
+          lines.push(`# ${item.title}\n`);
+          if (item.kind) lines.push(`**Kind:** ${item.kind}`);
+          if (item.summary) lines.push(`\n**Summary:** ${item.summary}\n`);
+          if (item.body) lines.push(`\n${item.body}\n`);
+
+          // Child items: prompts whose parent_slug matches this item's slug
+          if (item.kind === "tool" && item.slug) {
+            const children = await commonsFetch(
+              `/commons_items?select=title,summary,body&parent_slug=eq.${encodeURIComponent(item.slug)}&kind=eq.prompt&status=eq.canonical`
+            ) as Array<Partial<CommonsItem>>;
+            if (Array.isArray(children) && children.length > 0) {
+              lines.push(`\n## Prompts & Usage Patterns\n`);
+              for (const c of children) {
+                lines.push(`### ${c.title}`);
+                if (c.summary) lines.push(`\n${c.summary}\n`);
+                if (c.body) lines.push(c.body);
+                lines.push("");
+              }
+            }
+          }
+
+          // Community notes
+          if (item.id) {
+            try {
+              const notes = await commonsFetch(
+                `/commons_notes?select=note_text,author_name&item_id=eq.${item.id}&status=eq.approved`
+              ) as Array<Record<string, unknown>>;
+              if (Array.isArray(notes) && notes.length > 0) {
+                lines.push(`\n## Community Notes\n`);
+                for (const n of notes) {
+                  lines.push(`- ${n.note_text}`);
+                  if (n.author_name) lines.push(`  — ${n.author_name}`);
+                }
+                lines.push("");
+              }
+            } catch {
+              // Notes table errors shouldn't block the response
+            }
+          }
+
+          if (item.source_url) lines.push(`\n[Source](${item.source_url})`);
+          if (item.tags && item.tags.length > 0) lines.push(`**Tags:** ${item.tags.join(", ")}\n`);
+          lines.push(`\n---\n`);
+        }
+
+        return { content: [{ type: "text" as const, text: lines.join("\n") + CONTRIBUTION_NUDGE_TOOL }] };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: `Error fetching item details: ${error instanceof Error ? error.message : String(error)}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // -------------------------------------------------------------------------
+  // find-patterns-by-context — match a builder's situation to relevant items
+  // -------------------------------------------------------------------------
+
   s.tool(
     "find-patterns-by-context",
-    `Match a builder's specific situation to relevant relational tech patterns,
-tools, and guidance. Describe the builder's context and this tool will return
-the most relevant resources from both the embedded knowledge base and the
-live Studio library.`,
+    `Match a builder's specific situation to relevant relational tech patterns, tools, recipes, and stories from the commons. Combines stage/need-specific guidance with live search across the commons library.`,
     {
       situation: z.string().describe("Description of the builder's situation, neighborhood, and what they're trying to do"),
       builder_stage: z.enum(["curious", "experimenting", "building", "sustaining", "scaling"]).optional()
@@ -741,7 +479,6 @@ live Studio library.`,
     },
     async ({ situation, builder_stage, primary_need }) => {
       const results: string[] = [];
-
       results.push(`# Patterns for Your Context\n`);
       results.push(`Based on: ${situation}\n`);
 
@@ -774,31 +511,59 @@ live Studio library.`,
         results.push("");
       }
 
+      // Live search the commons using the situation as a search query
       try {
-        const tools = await studioFetch(`/tools?select=name,summary,tool_category,url`) as Array<Record<string, unknown>>;
+        const matches = await commonsRpc("search_commons_items", {
+          query_text: situation,
+          match_count: 8,
+          filter_kinds: ["recipe", "tool", "story", "framework"],
+        }) as Array<Partial<CommonsItem> & { rank?: number }>;
 
-        if (Array.isArray(tools) && tools.length > 0) {
-          results.push("## Relevant Tools from the Studio Library\n");
-          for (const tool of tools) {
-            results.push(`- **${tool.name}**: ${tool.summary || tool.tool_category || ""}`);
-            if (tool.url) results.push(`  ${tool.url}`);
+        if (Array.isArray(matches) && matches.length > 0) {
+          const byKind: Record<string, typeof matches> = {};
+          for (const m of matches) {
+            const k = m.kind || "unknown";
+            if (!byKind[k]) byKind[k] = [];
+            byKind[k].push(m);
           }
-          results.push("");
-        }
 
-        const stories = await studioFetch(`/stories?select=title,story_text,attribution`) as Array<Record<string, unknown>>;
-
-        if (Array.isArray(stories) && stories.length > 0) {
-          results.push("## Stories from Other Builders\n");
-          for (const story of stories) {
-            results.push(`### ${story.title || "A Builder's Story"}`);
-            if (story.story_text) results.push(String(story.story_text));
-            if (story.attribution) results.push(`— ${story.attribution}`);
+          if (byKind.recipe?.length) {
+            results.push(`## Relevant Recipes from the Commons\n`);
+            for (const r of byKind.recipe) {
+              results.push(`- **${r.title}** — ${r.summary || ""}`);
+            }
+            results.push("");
+          }
+          if (byKind.tool?.length) {
+            results.push(`## Relevant Tools from the Commons\n`);
+            for (const t of byKind.tool) {
+              results.push(`- **${t.title}** — ${t.summary || ""}`);
+              if (t.source_url) results.push(`  ${t.source_url}`);
+            }
+            results.push("");
+          }
+          if (byKind.story?.length) {
+            results.push(`## Stories from Other Builders\n`);
+            for (const s of byKind.story) {
+              results.push(`### ${s.title}`);
+              if (s.summary) results.push(s.summary);
+              if (s.attribution && typeof s.attribution === "object") {
+                const a = s.attribution as Record<string, unknown>;
+                if (a.name) results.push(`— ${a.name}`);
+              }
+              results.push("");
+            }
+          }
+          if (byKind.framework?.length) {
+            results.push(`## Relevant Frameworks\n`);
+            for (const f of byKind.framework) {
+              results.push(`- **${f.title}** — ${f.summary || ""}`);
+            }
             results.push("");
           }
         }
       } catch (error) {
-        results.push(`\n(Could not reach Studio library: ${error instanceof Error ? error.message : String(error)})`);
+        results.push(`\n(Could not reach commons library: ${error instanceof Error ? error.message : String(error)})`);
       }
 
       return { content: [{ type: "text" as const, text: results.join("\n") + CONTRIBUTION_NUDGE_PATTERNS }] };
@@ -806,30 +571,24 @@ live Studio library.`,
   );
 
   // -------------------------------------------------------------------------
-  // suggest-contribution — Help builders share back to the commons
+  // suggest-contribution — guided framework for contributing back
   // -------------------------------------------------------------------------
 
   s.tool(
     "suggest-contribution",
-    `Help a builder shape their experience into a contribution for the RT Studio commons. Call this when a builder wants to share a tool they built, a story from their neighborhood, or a community note about an existing tool. Returns a guided framework the AI can use to help the builder draft their contribution conversationally.`,
+    `Help a builder shape their experience into a contribution for the RT commons. Call this when a builder wants to share a tool they built, a story from their neighborhood, a recipe, or a community note. Returns a guided framework the AI can use to help the builder draft their contribution conversationally.`,
     {
       contribution_type: z.enum(["tool", "story", "community_note", "unsure"]).describe(
-        "What the builder wants to contribute: a new tool/remix, a builder story, " +
-        "a community note on an existing tool, or 'unsure' if they're not sure yet"
+        "What the builder wants to contribute"
       ),
       context: z.string().describe(
         "What the builder has shared so far about what they built, experienced, or learned"
       ),
-      neighborhood: z.string().optional().describe(
-        "The builder's neighborhood or place, if known"
-      ),
-      builder_name: z.string().optional().describe(
-        "The builder's first name, if they've shared it"
-      ),
+      neighborhood: z.string().optional().describe("The builder's neighborhood or place, if known"),
+      builder_name: z.string().optional().describe("The builder's first name, if they've shared it"),
     },
     async ({ contribution_type, context, neighborhood, builder_name }) => {
       const template = CONTRIBUTION_TEMPLATES[contribution_type] || CONTRIBUTION_TEMPLATES.unsure;
-
       const header = [
         `# Ready to Contribute`,
         ``,
@@ -842,28 +601,25 @@ live Studio library.`,
         ``,
       ].filter(Boolean).join("\n");
 
-      return {
-        content: [{
-          type: "text" as const,
-          text: header + template,
-        }],
-      };
+      return { content: [{ type: "text" as const, text: header + template }] };
     }
   );
 
   // -------------------------------------------------------------------------
-  // get-network-updates — What's happening across the relational tech network
+  // get-network-updates — Watcher feed of GitHub repo activity
+  // (still queries updates.relationaltechproject.org directly; will switch
+  // to commons_feed_events once Watcher ingest is wired up)
   // -------------------------------------------------------------------------
 
   s.tool(
     "get-network-updates",
-    `Get the latest updates from across the relational tech network — real changes happening in community tools built by neighbors in different neighborhoods. This feed is generated by scanning all open-source repos tagged 'relational-tech' on GitHub. Use this to show builders what others are working on, find relevant patterns, or get inspired by real activity in the network.`,
+    `Get the latest updates from across the relational tech network — real changes happening in community tools built by neighbors in different neighborhoods. This feed is generated by scanning all open-source repos tagged 'relational-tech' on GitHub.`,
     {
       repo_name: z.string().optional().describe(
         "Filter to updates from a specific project (e.g. 'cozy-corner', 'community-supplies')"
       ),
       tag: z.string().optional().describe(
-        "Filter to updates matching a specific tag (e.g. 'mutual-aid', 'sms', 'onboarding')"
+        "Filter to updates matching a specific tag"
       ),
       entry_type: z.enum(["all", "change", "welcome"]).default("all").describe(
         "Filter by entry type"
@@ -885,8 +641,6 @@ live Studio library.`,
         }
 
         let entries = (await res.json()) as Array<Record<string, unknown>>;
-
-        // Apply filters
         if (repo_name) {
           const needle = repo_name.toLowerCase();
           entries = entries.filter((e) => {
@@ -896,7 +650,6 @@ live Studio library.`,
             return name.includes(needle) || fullName.includes(needle);
           });
         }
-
         if (tag) {
           const needle = tag.toLowerCase();
           entries = entries.filter((e) => {
@@ -904,19 +657,10 @@ live Studio library.`,
             return Array.isArray(tags) && tags.some((t) => t.toLowerCase().includes(needle));
           });
         }
-
         if (entry_type && entry_type !== "all") {
           entries = entries.filter((e) => e.entry_type === entry_type);
         }
-
-        // Sort by timestamp descending
-        entries.sort((a, b) => {
-          const ta = String(a.timestamp ?? "");
-          const tb = String(b.timestamp ?? "");
-          return tb.localeCompare(ta);
-        });
-
-        // Slice to limit
+        entries.sort((a, b) => String(b.timestamp ?? "").localeCompare(String(a.timestamp ?? "")));
         entries = entries.slice(0, cap);
 
         if (entries.length === 0) {
@@ -930,9 +674,7 @@ live Studio library.`,
           };
         }
 
-        // Format as readable markdown
         const lines: string[] = [`# Network Updates\n`, `${entries.length} recent update${entries.length === 1 ? "" : "s"} from across the relational tech network.\n`];
-
         for (const entry of entries) {
           const repo = entry.repo as Record<string, unknown> | undefined;
           const change = entry.change as Record<string, unknown> | undefined;
@@ -947,20 +689,16 @@ live Studio library.`,
           lines.push(`### ${projectName}${timestamp ? ` — ${timestamp}` : ""}`);
           if (description) lines.push(`*${description}*\n`);
           if (summary) lines.push(summary + "\n");
-          if (Array.isArray(tags) && tags.length > 0) {
-            lines.push(`**Tags:** ${tags.join(", ")}\n`);
-          }
+          if (Array.isArray(tags) && tags.length > 0) lines.push(`**Tags:** ${tags.join(", ")}\n`);
           if (link) lines.push(`[View change](${link})\n`);
         }
 
-        return {
-          content: [{ type: "text" as const, text: lines.join("\n") + CONTRIBUTION_NUDGE_PATTERNS }],
-        };
+        return { content: [{ type: "text" as const, text: lines.join("\n") + CONTRIBUTION_NUDGE_PATTERNS }] };
       } catch (error) {
         return {
           content: [{
             type: "text" as const,
-            text: `Could not reach the network updates feed at updates.relationaltechproject.org. The feed is generated by a GitHub Action and may be temporarily unavailable.\n\nError: ${error instanceof Error ? error.message : String(error)}`,
+            text: `Could not reach the network updates feed at updates.relationaltechproject.org.\n\nError: ${error instanceof Error ? error.message : String(error)}`,
           }],
         };
       }
@@ -968,17 +706,80 @@ live Studio library.`,
   );
 }
 
+// ---------------------------------------------------------------------------
+// Prompts — guided workflows for builders, plus the practice-guide stance
+// ---------------------------------------------------------------------------
+
 function registerPrompts(s: McpServer) {
+  // practice-guide — adopt the Neighboring Commons stance
+  s.prompt(
+    "practice-guide",
+    `Adopt the Neighboring Commons practice-guide stance for the rest of the conversation. Use this when responding to community builders working through questions about their neighborhood. Drawn from the Neighboring Commons skill — relationships-first, asset-based, citing practitioners, calibrating confidence, inviting contribution.`,
+    {},
+    () => ({
+      messages: [{
+        role: "user",
+        content: {
+          type: "text",
+          text: `For this conversation, take on the role of a Neighboring Commons practice guide.
+
+You serve people building community at neighborhood scale — strengthening the relationships, mutual support, and shared life that make a place feel like home.
+
+## Your sources
+
+You can draw on the RTP commons via these MCP tools:
+- \`search-studio-library\` — search across tools, stories, prompts, recipes, references
+- \`get-tool-details\` — full content for a specific item
+- \`find-patterns-by-context\` — situation-matched patterns + stage/need guidance
+- \`get-network-updates\` — what builders across the network are shipping
+
+The commons holds RTP methodology, 8 frameworks, 64 neighborhood recipes (block parties, mutual aid, repair cafes, etc.), 198 field references (Block Party USA, Priya Parker, Dean Spade's mutual aid work, ABCD Institute, etc.), and builder-contributed tools and stories.
+
+## How you operate
+
+**Relationships First.** Before giving advice, understand the person's situation. What's their neighborhood like? What relationships already exist? What are they actually trying to do? Don't skip straight to recommendations.
+
+**Reciprocity Over Charity.** Treat them as a peer, not a client. They know their neighborhood better than any knowledge base does. Connect their lived knowledge to other practitioners' experiences — don't prescribe solutions.
+
+**Start Small.** Resist the urge to overwhelm. Suggest one or two practices that match their energy, capacity, and context. They can always come back for more.
+
+**Asset-Based.** Ask what's already working before suggesting what to add.
+
+**Celebrate Practitioners.** The knowledge exists because real people built real things in real places. Name them. Describe what they did and where. Don't strip their work into generic principles.
+
+**Honest About Limits.** The commons is substantial but not exhaustive. Say so when you hit the edges. Their experience may be filling a gap the field needs — invite them to contribute via \`suggest-contribution\`.
+
+## The Guidance Loop
+
+For any question:
+
+1. **Listen and Locate.** Restate the question. Search the commons (use the tools above). Identify what's well-covered and what isn't.
+
+2. **Respond and Attribute.** Lead with the most relevant practitioner work. Name the person or project, describe what they did and where, connect it to the user's situation. Tag your confidence: **KB-Grounded** (commons directly addresses this), **Informed** (synthesizing across sources), **Beyond the commons** (lower confidence, flag explicitly).
+
+3. **Self-Critique.** Before finalizing: Am I answering what was asked? Is this actionable? Did I overstate confidence? Am I centering the practitioners? Am I overwhelming the person (more than 4-5 resources = too many)?
+
+## Response format
+
+Conversational and warm, not report-like. End with a Sources section listing the commons items you referenced (use their slugs).
+
+## A note
+
+You are a practice guide, not an authority. The person asking is the one doing the work. They know their neighborhood. Your job is to connect their situation to others who've faced similar questions — not to replace their judgment.
+
+Now: greet them warmly, ask what they're working on, and listen.`,
+        },
+      }],
+    })
+  );
+
   s.prompt(
     "design-neighborhood-tool",
-    `Guided embedded design process for creating a new neighborhood-scale tool.
-Walks through RTP's embedded design methodology step by step: understanding
-context, mapping assets, identifying needs through relationships, designing
-with (not for) neighbors, and building the smallest useful thing.`,
+    `Guided embedded design process for creating a new neighborhood-scale tool.`,
     {
       neighborhood: z.string().optional().describe("Name or description of the neighborhood"),
-      builder_role: z.string().optional().describe("How the builder sees their role (neighbor, organizer, parent, etc.)"),
-      initial_idea: z.string().optional().describe("What the builder is thinking of building, if anything"),
+      builder_role: z.string().optional().describe("How the builder sees their role"),
+      initial_idea: z.string().optional().describe("What the builder is thinking of building"),
     },
     ({ neighborhood, builder_role, initial_idea }) => ({
       messages: [{
@@ -995,34 +796,15 @@ ${initial_idea ? `Initial idea: ${initial_idea}` : "Initial idea: (not yet speci
 ## Your Approach
 Guide me through the embedded design process. Don't jump to solutions. Instead:
 
-1. **Understand my place.** Ask about my neighborhood — its character, history,
-   who lives there, what already exists. Every place carries its own stories
-   and gifts.
+1. **Understand my place.** Ask about my neighborhood — its character, history, who lives there, what already exists. Every place carries its own stories and gifts.
+2. **Map my assets.** Help me see what's already here — people, spaces, channels, traditions, informal networks. Start from abundance, not deficit.
+3. **Explore relationships.** Who do I already know and trust? Where does energy live? What are people already doing informally that could be supported?
+4. **Listen for needs.** Through the relationships and assets I describe, help me notice what's needed. Not from surveys — from stories, from being present.
+5. **Design the smallest thing.** When we have enough context, help me design the minimum relational thing — the smallest tool that creates one connection that didn't exist before.
+6. **Check the principles.** Before we finalize anything, run it through the RTP principles (use the methodology resources via MCP).
 
-2. **Map my assets.** Help me see what's already here — people, spaces, channels,
-   traditions, informal networks. Start from abundance, not deficit.
-
-3. **Explore relationships.** Who do I already know and trust? Where does energy
-   live? What are people already doing informally that could be supported?
-
-4. **Listen for needs.** Through the relationships and assets I describe, help me
-   notice what's needed. Not from surveys — from stories, from being present.
-
-5. **Design the smallest thing.** When we have enough context, help me design
-   the minimum relational thing — the smallest tool that creates one connection
-   that didn't exist before.
-
-6. **Check the principles.** Before we finalize anything, run it through:
-   - Is this built by and accountable to the people it serves?
-   - Does it put relationships first, tools second?
-   - Does it build on existing assets?
-   - Is it simple, accessible, local, and open?
-   - Can it earn its place through word of mouth?
-   - Does it fit the 1:100 ratio?
-
-## Key RTP Principles to Hold
-- "Spend less time building in isolation and more time in the messiness and
-  beauty of community life"
+## Key RTP Principles
+- "Spend less time building in isolation and more time in the messiness and beauty of community life"
 - Dreams emerge from accountable relationships and time spent in the world together
 - Fewer "users," more co-creators (1:100 ratio)
 - Scale deep in place, spread horizontally through remixing
@@ -1036,9 +818,7 @@ Take your time. This is a conversation, not a checklist.`,
 
   s.prompt(
     "assess-relational-soil",
-    `Help a builder understand the current state of relational health in their
-neighborhood — the agency, belonging, and trust that already exists, and
-where there might be room to cultivate more.`,
+    `Help a builder understand the current state of relational health in their neighborhood — agency, belonging, and trust.`,
     {
       neighborhood: z.string().optional().describe("Name or description of the neighborhood"),
     },
@@ -1049,9 +829,7 @@ where there might be room to cultivate more.`,
           type: "text",
           text: `You are a relational tech partner helping me assess the relational soil in ${neighborhood || "my neighborhood"}.
 
-Relational soil is the conditions in which agency, belonging, and trust can grow.
-Every neighborhood has some — the question is understanding what's already there
-and where there's room to cultivate more.
+Relational soil is the conditions in which agency, belonging, and trust can grow. Every neighborhood has some — the question is understanding what's already there and where there's room to cultivate more.
 
 Guide me through an assessment by asking about:
 
@@ -1064,22 +842,15 @@ Guide me through an assessment by asking about:
 - Where do people gather? (formal and informal spaces)
 - Are there groups, channels, or traditions that bring people together?
 - Who feels included? Who might feel left out?
-- Is there a shared identity or story about this place?
 
 ## Trust — Do people engage in shared care?
 - Do neighbors help each other (meals, tools, rides, childcare)?
 - Is there mutual aid, formal or informal?
-- Do people trust institutions here (schools, businesses, local government)?
-- Where are trust gaps — between groups, generations, cultures?
+- Where are trust gaps?
 
-For each dimension, help me see:
-1. What already exists (assets)
-2. What's growing or emerging
-3. Where there might be room to cultivate more
-4. One small step I could take to strengthen this dimension
+For each dimension, help me see: what already exists (assets), what's growing, where there's room to cultivate more, and one small step I could take.
 
-Be warm, specific, and asset-based. Don't catalog deficits — help me see
-the life that's already here and where to nurture more of it.`,
+Be warm, specific, and asset-based. Don't catalog deficits — help me see the life that's already here.`,
         },
       }],
     })
@@ -1087,22 +858,19 @@ the life that's already here and where to nurture more of it.`,
 
   s.prompt(
     "create-builder-action-plan",
-    `Generate a personalized action plan for a community builder, matching their
-specific situation to RTP patterns, tools, and stories from the Studio library.
-Structured in three time horizons: this week, this month, this quarter.`,
+    `Generate a personalized action plan, matching the builder's situation to commons patterns, tools, recipes, and stories. Structured in three time horizons: this week, this month, this quarter.`,
     {
-      builder_name: z.string().optional().describe("The builder's name"),
-      neighborhood: z.string().optional().describe("Their neighborhood or community"),
-      situation: z.string().optional().describe("Description of their current situation and what they're trying to do"),
-      stage: z.string().optional().describe("Their builder stage: curious, experimenting, building, sustaining, or scaling"),
+      builder_name: z.string().optional(),
+      neighborhood: z.string().optional(),
+      situation: z.string().optional(),
+      stage: z.string().optional(),
     },
     ({ builder_name, neighborhood, situation, stage }) => ({
       messages: [{
         role: "user",
         content: {
           type: "text",
-          text: `You are creating a personalized action plan for a community builder, drawing
-from the Relational Tech Project's knowledge base and Studio library.
+          text: `You are creating a personalized action plan for a community builder, drawing from the RTP commons.
 
 ## Builder Context
 ${builder_name ? `Name: ${builder_name}` : "Name: (ask me)"}
@@ -1111,41 +879,23 @@ ${situation ? `Situation: ${situation}` : "Situation: (ask me)"}
 ${stage ? `Builder stage: ${stage}` : "Builder stage: (assess through conversation)"}
 
 ## Your Process
-1. First, understand this builder's context deeply. Ask about their
-   neighborhood, relationships, assets, and what they're trying to do.
-
-2. Search the Studio library (use search-studio-library and
-   find-patterns-by-context tools) to find relevant tools, stories,
-   and patterns.
-
+1. Understand context deeply — ask about neighborhood, relationships, assets.
+2. Search the commons (search-studio-library, find-patterns-by-context) for relevant tools, recipes, and stories.
 3. Build the action plan in three layers:
 
 ### This Week (Quick Wins)
-- Concrete, low-effort actions for the next 7 days
-- At least one face-to-face interaction
-- Connected to specific RTP tools or patterns
+Concrete, low-effort actions for the next 7 days. At least one face-to-face interaction. Connected to specific commons items.
 
 ### This Month (Foundation Building)
-- Set up or strengthen communication channels
-- Map neighborhood assets
-- Identify 2-3 co-builders
-- Connect to a specific RTP tool from the library
+Communication channels, asset mapping, finding 2-3 co-builders. Connect to a specific recipe or tool from the commons.
 
 ### This Quarter (Growth & Sustainability)
-- Formalize systems
-- Connect to broader networks
-- Develop sustainability practices
-- Consider contributing back to the commons
+Formalize systems, connect to broader networks, develop sustainability practices, consider contributing back.
 
-4. Self-critique before finalizing:
-- Is every action relevant to THIS builder's situation?
-- Does it match their readiness, not where I wish they were?
-- Does it lead with assets, not deficits?
-- Would a new builder feel energized or exhausted? When in doubt, cut.
+4. Self-critique: Is every action relevant to THIS builder? Does it match their readiness? Does it lead with assets? Would they feel energized or exhausted? When in doubt, cut.
 
 ## Tone
-Warm but not saccharine. Specific, not generic. Asset-based. Honest about
-difficulty. Rooted in their actual place, not abstractions.`,
+Warm but not saccharine. Specific, not generic. Asset-based. Honest about difficulty. Rooted in their actual place.`,
         },
       }],
     })
@@ -1153,11 +903,9 @@ difficulty. Rooted in their actual place, not abstractions.`,
 
   s.prompt(
     "remix-existing-tool",
-    `Help a builder adapt an existing relational tech tool or pattern for their
-own neighborhood context. Remixing — not replication — is how relational
-tech spreads.`,
+    `Help a builder adapt an existing relational tech tool or recipe for their own neighborhood. Remixing — not replication — is how relational tech spreads.`,
     {
-      source_tool: z.string().optional().describe("The tool or pattern they want to remix"),
+      source_tool: z.string().optional().describe("The tool or recipe to remix"),
       target_neighborhood: z.string().optional().describe("The neighborhood they're adapting it for"),
     },
     ({ source_tool, target_neighborhood }) => ({
@@ -1165,40 +913,28 @@ tech spreads.`,
         role: "user",
         content: {
           type: "text",
-          text: `You are helping me remix an existing relational tech tool for my neighborhood.
+          text: `You are helping me remix an existing relational tech tool or recipe for my neighborhood.
 
-${source_tool ? `Tool to remix: ${source_tool}` : "I'd like to browse what's available and choose something to remix."}
+${source_tool ? `Item to remix: ${source_tool}` : "I'd like to browse what's available and choose something to remix."}
 ${target_neighborhood ? `My neighborhood: ${target_neighborhood}` : "My neighborhood: (ask me about it)"}
 
 ## The Remix Approach
-Relational tech spreads through remixing, not replication. Each place carries
-its own histories, wounds, wisdom, and gifts. A tool that works in the Outer
-Sunset won't work the same way in your neighborhood — and that's the point.
+Relational tech spreads through remixing, not replication. A tool that works in the Outer Sunset won't work the same way in your neighborhood — and that's the point.
 
 Guide me through:
 
-1. **Understand the source.** What does this tool do? What need does it serve?
-   What's the relational infrastructure underneath it? (Use search-studio-library
-   and get-tool-details to look it up.)
-
-2. **Understand my place.** Ask about my neighborhood. What's the character?
-   Who's here? What already exists? What makes this place distinct?
-
-3. **Find the fit.** What elements of the source tool map to real needs in my
-   place? What doesn't translate? What might I need to add or remove?
-
-4. **Design the remix.** Help me sketch a version that's adapted to my context.
-   Keep the relational core. Change the specifics. Make it mine.
-
-5. **Plan the build.** What's the smallest version I can create and test with
-   real neighbors? Who should I build it with?
+1. **Understand the source.** Use get-tool-details to look it up. What does it do? What relational infrastructure underneath?
+2. **Understand my place.** Ask about my neighborhood. Character, who's here, what already exists, what makes this place distinct.
+3. **Find the fit.** What elements map to real needs? What doesn't translate?
+4. **Design the remix.** Adapted to my context. Keep the relational core. Change the specifics.
+5. **Plan the build.** Smallest version I can create and test with real neighbors.
 
 ## Key Principles
 - The goal isn't a copy — it's inspiration and adaptation
-- Start from my place, not from the source tool
+- Start from my place, not from the source
 - Build with neighbors, not for them
-- The remix should be small enough to test in a week
-- If it works, contribute it back to the commons`,
+- Small enough to test in a week
+- If it works, contribute it back via suggest-contribution`,
         },
       }],
     })
@@ -1211,10 +947,9 @@ Guide me through:
 
 const server = new McpServer({
   name: "rtp-relational-tech",
-  version: "0.1.0",
+  version: "0.2.0",
 });
 
-// Register everything on the default server (used by stdio)
 registerResources(server);
 registerTools(server);
 registerPrompts(server);
@@ -1238,249 +973,106 @@ async function startHTTP() {
   const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
 
-    // Health check
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", server: "rtp-relational-tech", version: "0.1.0" }));
+      res.end(JSON.stringify({ status: "ok", server: "rtp-relational-tech", version: "0.2.0", source: "commons" }));
       return;
     }
 
-    // MCP endpoint
     if (url.pathname === "/mcp") {
-      // CORS preflight
       if (req.method === "OPTIONS") {
         res.writeHead(204, {
           "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, mcp-session-id",
-          "Access-Control-Expose-Headers": "mcp-session-id",
+          "Access-Control-Allow-Methods": "POST, GET, OPTIONS, DELETE",
+          "Access-Control-Allow-Headers": "Content-Type, Mcp-Session-Id, Authorization",
+          "Access-Control-Expose-Headers": "Mcp-Session-Id",
         });
         res.end();
         return;
       }
 
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");
-
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
+      let transport: StreamableHTTPServerTransport;
 
-      // Route to existing session
       if (sessionId && sessions.has(sessionId)) {
-        const transport = sessions.get(sessionId)!;
-        await transport.handleRequest(req, res);
-        return;
-      }
-
-      // New session (initialization request)
-      if (req.method === "POST" && !sessionId) {
-        const transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: () => randomUUID(),
+        transport = sessions.get(sessionId)!;
+      } else {
+        const newSessionId = randomUUID();
+        transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => newSessionId,
+          onsessioninitialized: (id) => { sessions.set(id, transport); },
         });
 
-        transport.onclose = () => {
-          const sid = [...sessions.entries()].find(([, t]) => t === transport)?.[0];
-          if (sid) sessions.delete(sid);
-        };
-
-        const sessionServer = new McpServer({
+        const perSessionServer = new McpServer({
           name: "rtp-relational-tech",
-          version: "0.1.0",
+          version: "0.2.0",
         });
-
-        registerResources(sessionServer);
-        registerTools(sessionServer);
-        registerPrompts(sessionServer);
-
-        await sessionServer.connect(transport);
-        await transport.handleRequest(req, res);
-
-        const newSessionId = res.getHeader("mcp-session-id") as string | undefined;
-        if (newSessionId) {
-          sessions.set(newSessionId, transport);
-        }
-
-        return;
+        registerResources(perSessionServer);
+        registerTools(perSessionServer);
+        registerPrompts(perSessionServer);
+        await perSessionServer.connect(transport);
       }
 
-      res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Bad request — missing or invalid session" }));
+      await transport.handleRequest(req, res);
       return;
     }
 
     // Landing page
     if (url.pathname === "/") {
-      res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(`<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Relational Tech MCP Server</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --color-bg: hsl(30, 40%, 92%);
-    --color-surface: hsl(30, 45%, 96%);
-    --color-text: hsl(20, 30%, 22%);
-    --color-text-secondary: hsl(20, 25%, 48%);
-    --color-accent: hsl(16, 55%, 50%);
-    --color-accent-hover: hsl(14, 60%, 55%);
-    --color-border: hsl(28, 25%, 82%);
-    --color-tag-bg: hsl(28, 35%, 85%);
-    --font-heading: 'Fraunces', Georgia, serif;
-    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    --max-width: 900px;
-  }
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: var(--font-body);
-    font-size: 16px;
-    line-height: 1.6;
-    color: var(--color-text);
-    background: var(--color-bg);
-    min-height: 100vh;
-  }
-  .container {
-    max-width: var(--max-width);
-    margin: 0 auto;
-    padding: 3rem 1.5rem;
-  }
-  @media (min-width: 768px) {
-    .container { padding: 4rem 3rem; }
-  }
-  h1 {
-    font-family: var(--font-heading);
-    font-weight: 900;
-    font-size: 2.4rem;
-    line-height: 1.15;
-    color: var(--color-text);
-    margin-bottom: 0.5rem;
-  }
-  .subtitle {
-    color: var(--color-text-secondary);
-    font-size: 1.05rem;
-    margin-bottom: 2rem;
-  }
-  .quote {
-    font-family: var(--font-heading);
-    font-style: italic;
-    font-weight: 400;
-    font-size: 1.1rem;
-    color: var(--color-text-secondary);
-    border-left: 3px solid var(--color-accent);
-    padding: 0.75rem 1.25rem;
-    margin: 2rem 0;
-    background: var(--color-surface);
-    border-radius: 0 12px 12px 0;
-  }
-  .card {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 16px;
-    padding: 1.5rem 1.75rem;
-    margin: 1.5rem 0;
-  }
-  .card p {
-    margin-bottom: 0.75rem;
-  }
-  .card p:last-child { margin-bottom: 0; }
-  code {
-    font-family: 'SF Mono', 'Fira Code', monospace;
-    font-size: 0.9em;
-    background: hsl(20, 25%, 16%);
-    color: hsl(30, 45%, 92%);
-    padding: 0.2em 0.5em;
-    border-radius: 6px;
-  }
-  a {
-    color: var(--color-accent);
-    text-decoration: none;
-    font-weight: 500;
-  }
-  a:hover {
-    color: var(--color-accent-hover);
-    text-decoration: underline;
-  }
-  nav {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    margin-top: 2rem;
-  }
-  nav a {
-    display: inline-block;
-    padding: 0.5rem 1.1rem;
-    background: var(--color-tag-bg);
-    border-radius: 8px;
-    font-size: 0.9rem;
-    font-weight: 500;
-    color: var(--color-text);
-    transition: background 0.15s, color 0.15s;
-  }
-  nav a:hover {
-    background: var(--color-accent);
-    color: white;
-    text-decoration: none;
-  }
-  footer {
-    margin-top: 3rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--color-border);
-    color: var(--color-text-secondary);
-    font-size: 0.85rem;
-  }
-</style>
-</head>
-<body>
-<div class="container">
-  <h1>Relational Tech MCP Server</h1>
-  <p class="subtitle">Connect your AI tools to the relational tech ecosystem</p>
-
-  <div class="quote">"We are a river, carrying stories, tools, learning, and relationships across many local gardens."</div>
-
-  <div class="card">
-    <p>This is an MCP server for the <a href="https://relationaltechproject.org">Relational Tech Project</a>. It gives AI tools access to the Studio library, network updates, builder guides, and pattern-matching resources.</p>
-    <p>Connect your AI tool to <code>${req.headers.host}/mcp</code> to get started.</p>
-  </div>
-
-  <nav>
-    <a href="https://github.com/The-Relational-Technology-Project/rt-mcp-server">GitHub</a>
-    <a href="https://studio.relationaltechproject.org">Studio</a>
-    <a href="https://updates.relationaltechproject.org">Network Updates</a>
-    <a href="/health">Health Check</a>
-  </nav>
-
-  <footer>
-    Part of the <a href="https://relationaltechproject.org">Relational Tech Project</a>
-  </footer>
-</div>
-</body>
-</html>`);
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(LANDING_HTML);
       return;
     }
 
-    res.writeHead(404);
+    res.writeHead(404, { "Content-Type": "text/plain" });
     res.end("Not found");
   });
 
   httpServer.listen(PORT, () => {
-    console.error(`RTP Relational Tech MCP server running on http://localhost:${PORT}`);
-    console.error(`MCP endpoint: http://localhost:${PORT}/mcp`);
+    console.error(`RTP Relational Tech MCP server listening on port ${PORT}`);
     console.error(`Health check: http://localhost:${PORT}/health`);
+    console.error(`MCP endpoint: http://localhost:${PORT}/mcp`);
   });
 }
 
-async function main() {
-  if (MODE === "http") {
-    await startHTTP();
-  } else {
-    await startStdio();
+const LANDING_HTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>RTP Relational Tech MCP Server</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 700px; margin: 4rem auto; padding: 0 1.5rem; line-height: 1.6; color: #2d2d2d; background: #faf5ee; }
+    h1 { font-family: Georgia, serif; color: #8b3a1f; }
+    code { background: #f0e6d2; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+    pre { background: #f0e6d2; padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    a { color: #8b3a1f; }
+    .badge { display: inline-block; background: #8b3a1f; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; }
+  </style>
+</head>
+<body>
+  <h1>RTP Relational Tech MCP Server <span class="badge">v0.2.0</span></h1>
+  <p>An MCP server carrying relational tech principles, neighborhood recipes, builder stories, and the RTP commons library to any AI builder tool.</p>
+  <h2>Connect</h2>
+  <p>Add to your <code>.mcp.json</code>:</p>
+  <pre>{
+  "mcpServers": {
+    "relational-tech": {
+      "type": "streamable-http",
+      "url": "https://mcp.relationaltechproject.org/mcp"
+    }
   }
-}
+}</pre>
+  <p>Then invoke the <code>practice-guide</code> prompt to adopt the Neighboring Commons stance for the rest of your conversation.</p>
+  <h2>Source</h2>
+  <p>Open source on <a href="https://github.com/The-Relational-Technology-Project/rt-mcp-server">GitHub</a>. Built by the <a href="https://relationaltechproject.org">Relational Technology Project</a>.</p>
+</body>
+</html>`;
 
-main().catch((error) => {
-  console.error("Fatal error:", error);
-  process.exit(1);
-});
+if (MODE === "stdio") {
+  startStdio().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+} else {
+  startHTTP();
+}

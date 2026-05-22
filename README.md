@@ -12,7 +12,9 @@ Made in the Outer Sunset, for neighborhoods everywhere.
 
 This is the **hosted service version** of the RTP MCP server. It runs as an HTTP service so builders can connect with just a URL — no local install, no cloning repos, no command line.
 
-When a builder points their AI tool at this service, their AI gets access to RTP's core frameworks (embedded design, 1:100, three-layer neighborhood model, relational soil, playbooks, and more), live tools and stories from the [Relational Tech Studio](https://studio.relationaltechproject.org), and guided workflows for designing neighborhood-scale tools.
+When a builder points their AI tool at this service, their AI gets access to the **RTP commons** — a single shared library covering RTP methodology, 8 neighborhood frameworks, 64 actionable recipes (block parties, mutual aid pods, repair cafes, restorative circles, and more), 198 field reference entries, plus the live tools and stories from forked Studios across the network. All queryable through one consistent set of MCP tools.
+
+As of v0.2.0, the server queries the **RTP global commons** at `odowkowcinyoxejyzhwl.supabase.co` rather than any single Studio's database. Forked Studios (Thread, Outer Sunset, etc.) publish into this commons, and any AI tool connecting via this MCP server sees the union of all approved network content.
 
 For the **local version** (runs on your own machine via stdio), see [local-rt-mcp-server](https://github.com/The-Relational-Technology-Project/local-rt-mcp-server).
 
@@ -115,22 +117,36 @@ Standard Node.js HTTP server. Any platform that runs Node 18+ works. The server 
 | `challenges-guide` | Navigating trust, burnout, scale, access, language barriers, conflict, momentum |
 | `network-and-community` | RTP network, adjacent movements, connection patterns for builders |
 
-### Tools (Live Studio API)
+### Tools (Live Commons API)
 
 | Tool | What It Does |
 |---|---|
-| `search-studio-library` | Search the full Studio library — tools, stories, prompts, and community notes |
-| `get-tool-details` | Look up a specific tool with its linked prompts, community notes, and usage guidance |
-| `find-patterns-by-context` | Describe a builder's situation and get matched to relevant patterns and guidance |
+| `search-studio-library` | Search the commons across all kinds (tools, stories, prompts, recipes, references). Full-text ranked. |
+| `get-tool-details` | Look up a specific item with its full body, linked prompts (for tools), and community notes |
+| `find-patterns-by-context` | Describe a builder's situation and get matched to relevant patterns, recipes, tools, and stories |
+| `suggest-contribution` | Guided framework for shaping a builder's experience into a commons contribution |
+| `get-network-updates` | Latest activity across the relational tech network (powered by the Watcher feed) |
 
 ### Prompts (Guided Workflows)
 
 | Prompt | What It Does |
 |---|---|
+| `practice-guide` | **NEW** — Adopt the Neighboring Commons practice-guide stance for the conversation (relationships-first, asset-based, citing practitioners, inviting contribution) |
 | `design-neighborhood-tool` | Guided embedded design process for creating neighborhood-scale tools |
 | `assess-relational-soil` | Assess agency, belonging, and trust in a neighborhood |
 | `create-builder-action-plan` | Personalized action plan: this week, this month, this quarter |
-| `remix-existing-tool` | Adapt an existing tool or pattern for a new neighborhood |
+| `remix-existing-tool` | Adapt an existing tool or recipe for a new neighborhood |
+
+### Configuration
+
+The MCP server reads its commons connection from environment variables (with sensible defaults):
+
+| Env Var | Default | Purpose |
+|---|---|---|
+| `RTP_COMMONS_URL` | `https://odowkowcinyoxejyzhwl.supabase.co/rest/v1` | REST endpoint for the commons Supabase |
+| `RTP_COMMONS_ANON_KEY` | (baked in) | Public anon key for the commons project (RLS enforces read-only access) |
+| `PORT` | `3000` | HTTP server port (most hosts set this automatically) |
+| `RTP_MCP_TRANSPORT` | `http` | Set to `stdio` for local CLI use |
 
 ---
 
