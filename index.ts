@@ -1036,24 +1036,148 @@ async function startHTTP() {
 }
 
 const LANDING_HTML = `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RTP Relational Tech MCP Server</title>
+  <meta name="description" content="Connect any MCP-compatible AI tool to the Relational Tech Project commons — methodology, neighborhood recipes, frameworks, and field references.">
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 700px; margin: 4rem auto; padding: 0 1.5rem; line-height: 1.6; color: #2d2d2d; background: #faf5ee; }
-    h1 { font-family: Georgia, serif; color: #8b3a1f; }
-    code { background: #f0e6d2; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
-    pre { background: #f0e6d2; padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
-    a { color: #8b3a1f; }
-    .badge { display: inline-block; background: #8b3a1f; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; }
+    :root {
+      --bg: #faf5ee;
+      --surface: #ffffff;
+      --surface-warm: #fff4ec;
+      --ink: #2d2417;
+      --ink-soft: #6b5a45;
+      --ink-quiet: #9c8770;
+      --accent: #b85b3a;
+      --accent-dark: #8b3a1f;
+      --border: #e5d9c4;
+      --code-bg: #f5ecd9;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem 4rem;
+      line-height: 1.65;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    h1 {
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--accent-dark);
+      font-size: 2.2rem;
+      margin: 0 0 0.4rem;
+      line-height: 1.15;
+    }
+    h2 {
+      font-family: Georgia, serif;
+      color: var(--ink);
+      font-size: 1.4rem;
+      margin: 2.4rem 0 0.7rem;
+    }
+    h3 {
+      font-size: 1.05rem;
+      margin: 1.6rem 0 0.4rem;
+      color: var(--ink);
+    }
+    .tagline { color: var(--ink-soft); font-size: 1.05rem; margin: 0 0 1.4rem; }
+    .badge {
+      display: inline-block;
+      background: var(--accent);
+      color: white;
+      padding: 2px 9px;
+      border-radius: 4px;
+      font-size: 0.72em;
+      letter-spacing: 0.04em;
+      vertical-align: middle;
+      margin-left: 0.4rem;
+    }
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin: 1.2rem 0 1.8rem;
+    }
+    .stat {
+      background: var(--surface-warm);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 0.9rem;
+      font-size: 0.85rem;
+    }
+    .stat b { color: var(--accent-dark); font-size: 1.05rem; }
+    .stat span { color: var(--ink-soft); }
+    code {
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.88em;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1rem 1.1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.85em;
+      border: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+      line-height: 1.5;
+    }
+    a { color: var(--accent-dark); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+    a:hover { color: var(--accent); }
+    ul { padding-left: 1.3rem; }
+    li { margin: 0.35rem 0; }
+    .surface {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem 1.4rem;
+      margin: 1rem 0;
+    }
+    .quiet { color: var(--ink-quiet); font-size: 0.9rem; }
+    .quiet em { font-style: italic; }
+    .endpoint {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+      background: var(--accent);
+      color: white;
+      padding: 0.45rem 0.8rem;
+      border-radius: 6px;
+      display: inline-block;
+      font-size: 0.92em;
+    }
+    .examples li::before {
+      content: "→ ";
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .examples li { list-style: none; margin-left: -1.3rem; }
+    .footer {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      color: var(--ink-quiet);
+      font-size: 0.88rem;
+    }
   </style>
 </head>
 <body>
   <h1>RTP Relational Tech MCP Server <span class="badge">v0.2.0</span></h1>
-  <p>An MCP server carrying relational tech principles, neighborhood recipes, builder stories, and the RTP commons library to any AI builder tool.</p>
+  <p class="tagline">Connect any MCP-compatible AI tool to the <a href="https://relationaltechproject.org">Relational Tech Project</a> commons — methodology, neighborhood recipes, frameworks, and field references.</p>
+
+  <div class="stats">
+    <div class="stat"><b>275+</b> <span>commons items</span></div>
+    <div class="stat"><b>8</b> <span>methodology docs</span></div>
+    <div class="stat"><b>7</b> <span>frameworks</span></div>
+    <div class="stat"><b>63</b> <span>neighborhood recipes</span></div>
+    <div class="stat"><b>197</b> <span>field references</span></div>
+  </div>
+
   <h2>Connect</h2>
-  <p>Add to your <code>.mcp.json</code>:</p>
+  <p>Add this to your AI tool's MCP configuration:</p>
   <pre>{
   "mcpServers": {
     "relational-tech": {
@@ -1062,9 +1186,45 @@ const LANDING_HTML = `<!DOCTYPE html>
     }
   }
 }</pre>
-  <p>Then invoke the <code>practice-guide</code> prompt to adopt the Neighboring Commons stance for the rest of your conversation.</p>
-  <h2>Source</h2>
-  <p>Open source on <a href="https://github.com/The-Relational-Technology-Project/rt-mcp-server">GitHub</a>. Built by the <a href="https://relationaltechproject.org">Relational Technology Project</a>.</p>
+
+  <p><strong>Endpoint:</strong> <span class="endpoint">https://mcp.relationaltechproject.org/mcp</span></p>
+
+  <div class="surface">
+    <h3 style="margin-top:0;">Where this goes</h3>
+    <ul>
+      <li><strong>Claude Code</strong> — paste into <code>.mcp.json</code> or run <code>claude mcp add relational-tech --type streamable-http --url https://mcp.relationaltechproject.org/mcp</code></li>
+      <li><strong>Claude Desktop</strong> — Settings → Developer → Edit Config</li>
+      <li><strong>Cursor, Windsurf, Zed, etc.</strong> — any tool that supports MCP Streamable HTTP</li>
+    </ul>
+    <p class="quiet">No API key. No signup. Read-only access enforced by row-level security on the commons database.</p>
+  </div>
+
+  <h2>Start here: the practice-guide prompt</h2>
+  <p>Once connected, invoke the <code>practice-guide</code> prompt to put your AI in a Neighboring Commons practice-guide stance for the rest of the conversation: relationships-first, asset-based, citing practitioners by name, calibrating confidence honestly.</p>
+
+  <h2>What you can ask</h2>
+  <ul class="examples">
+    <li>"Help me design a fix-it fair for my neighborhood"</li>
+    <li>"I want to start a mutual aid pod on my block — where do I begin?"</li>
+    <li>"What's microsolidarity, and how does it differ from mutual aid?"</li>
+    <li>"How do I host a block party? What does Vanessa Elias do at Block Party USA?"</li>
+    <li>"I'm feeling burned out from community organizing — what do practitioners recommend?"</li>
+  </ul>
+  <p>Your AI will surface relevant recipes, frameworks, methodology, and practitioner references — with attribution and source URLs so you can read the original work.</p>
+
+  <h2>What's in the toolbox</h2>
+  <p><strong>5 tools</strong>: <code>search-studio-library</code>, <code>get-tool-details</code>, <code>find-patterns-by-context</code>, <code>suggest-contribution</code>, <code>get-network-updates</code></p>
+  <p><strong>5 prompts</strong>: <code>practice-guide</code>, <code>design-neighborhood-tool</code>, <code>assess-relational-soil</code>, <code>create-builder-action-plan</code>, <code>remix-existing-tool</code></p>
+  <p><strong>9 resources</strong> at <code>rtp://knowledge/*</code> URIs (the methodology docs, queried live from the commons)</p>
+
+  <h2>Source &amp; details</h2>
+  <p>Open source on <a href="https://github.com/The-Relational-Technology-Project/rt-mcp-server">GitHub</a>. See the README for the full architecture, deployment guide, and how the commons works.</p>
+  <p>Health check: <a href="/health">/health</a></p>
+
+  <div class="footer">
+    <p>Made by the <a href="https://relationaltechproject.org">Relational Tech Project</a>. The Studio is at <a href="https://studio.relationaltechproject.org">studio.relationaltechproject.org</a>.</p>
+    <p><em>"We are the river — carrying stories, tools, learning, and relationships across many local gardens, while honoring that each garden must be tended by those who live there."</em></p>
+  </div>
 </body>
 </html>`;
 

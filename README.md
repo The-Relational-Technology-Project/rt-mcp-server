@@ -1,6 +1,6 @@
 # RT MCP Server
 
-Hosted MCP service for the [Relational Tech Project](https://relationaltechproject.org) — relational tech principles, patterns, and the Studio library, accessible to any AI builder tool via URL.
+Hosted MCP service for the [Relational Tech Project](https://relationaltechproject.org) — RTP methodology, neighborhood recipes, frameworks, and field references, accessible to any AI builder tool via URL.
 
 > "We are the river — carrying stories, tools, learning, and relationships across many local gardens, while honoring that each garden must be tended by those who live there."
 
@@ -10,30 +10,35 @@ Made in the Outer Sunset, for neighborhoods everywhere.
 
 ## What This Does
 
-This is the **hosted service version** of the RTP MCP server. It runs as an HTTP service so builders can connect with just a URL — no local install, no cloning repos, no command line.
+The RT MCP Server is the hosted gateway to the **RTP global commons** — a shared library of neighborhood practice and relational tech knowledge that any MCP-compatible AI tool can query.
 
-When a builder points their AI tool at this service, their AI gets access to the **RTP commons** — a single shared library covering RTP methodology, 8 neighborhood frameworks, 64 actionable recipes (block parties, mutual aid pods, repair cafes, restorative circles, and more), 198 field reference entries, plus the live tools and stories from forked Studios across the network. All queryable through one consistent set of MCP tools.
+When you connect your AI tool to this server, you get access to **275+ canonical items** (and growing as Studios across the network contribute back):
 
-As of v0.2.0, the server queries the **RTP global commons** at `odowkowcinyoxejyzhwl.supabase.co` rather than any single Studio's database. Forked Studios (Thread, Outer Sunset, etc.) publish into this commons, and any AI tool connecting via this MCP server sees the union of all approved network content.
+- **8 RTP methodology docs** — the foundational frameworks (core principles, three layers, builder spectrum, embedded design, measurement, playbooks, challenges, network)
+- **7 frameworks** — cross-practice patterns like the 10 Principles of Neighboring, 5 Cs of Community, Asset-Based Community Development
+- **63 neighborhood recipes** — actionable how-tos with ingredients, steps, variations, and stories (block parties, mutual aid pods, repair cafes, restorative circles, skillshares, and many more)
+- **197 field references** — practitioners' work, organizations, books, and research (Block Party USA, Priya Parker, Dean Spade, ABCD Institute, microsolidarity, and dozens more)
 
-For the **local version** (runs on your own machine via stdio), see [local-rt-mcp-server](https://github.com/The-Relational-Technology-Project/local-rt-mcp-server).
+As of v0.2.0 the server queries the commons live — no hardcoded knowledge — so the catalog grows automatically as items are added.
+
+The hosted endpoint is at **`https://mcp.relationaltechproject.org/mcp`**. For a local stdio version, set `RTP_MCP_TRANSPORT=stdio` when running the same code.
 
 ---
 
 ## For Builders: Connect Your AI Tool
 
-Point your AI tool at the MCP endpoint. No setup beyond this.
+Point your AI tool at the MCP endpoint. No API key, no signup.
 
 ### Claude Code
 
-Add to your `.mcp.json`:
+Add to your `.mcp.json` (or run `claude mcp add`):
 
 ```json
 {
   "mcpServers": {
-    "rtp-relational-tech": {
+    "relational-tech": {
       "type": "streamable-http",
-      "url": "https://YOUR_DEPLOYED_URL/mcp"
+      "url": "https://mcp.relationaltechproject.org/mcp"
     }
   }
 }
@@ -41,131 +46,153 @@ Add to your `.mcp.json`:
 
 ### Claude Desktop
 
-Go to Settings → Developer → Edit Config:
+Settings → Developer → Edit Config, then add the same block above.
 
-```json
-{
-  "mcpServers": {
-    "rtp-relational-tech": {
-      "type": "streamable-http",
-      "url": "https://YOUR_DEPLOYED_URL/mcp"
-    }
-  }
-}
-```
+### Cursor, Windsurf, Zed, anything else MCP-compatible
 
-### Any Other MCP-Compatible Tool
+Point it at `https://mcp.relationaltechproject.org/mcp` using Streamable HTTP transport.
 
-Point it at `https://YOUR_DEPLOYED_URL/mcp` using Streamable HTTP transport.
+### Once you're connected
 
-### Things You Can Ask Once Connected
+Try invoking the **`practice-guide`** prompt first — it puts your AI into a Neighboring Commons practice-guide stance for the rest of the conversation: relationships-first, asset-based, citing practitioners by name, calibrating confidence honestly, inviting contribution.
 
-- "Help me design a community calendar for my neighborhood"
+Then ask things like:
+
+- "Help me design a fix-it fair for my neighborhood"
 - "I want to start a mutual aid pod on my block — where do I begin?"
-- "What relational tech tools exist for connecting neighbors?"
-- "I'm feeling burned out from community organizing — what should I do?"
-- "Help me remix the Outer Sunset's field guide for my neighborhood"
+- "What's microsolidarity, and how does it differ from mutual aid?"
+- "How do I host a block party? What does Vanessa Elias do at Block Party USA?"
+- "I'm feeling burned out from community organizing — what do practitioners recommend?"
 
-Your AI will ground its responses in RTP's embedded design methodology — asking about your place, your relationships, and your assets before jumping to solutions.
-
----
-
-## Deploying
-
-This repo is pre-configured for hosted deployment. `npm start` launches the HTTP server — no environment variables needed.
-
-### Deploy to Railway
-
-1. Connect this GitHub repo at [railway.app](https://railway.app)
-2. Railway auto-detects Node.js. That's it — deploy.
-3. Your MCP endpoint will be at `https://your-app.up.railway.app/mcp`
-
-### Deploy to Render
-
-1. Create a new Web Service at [render.com](https://render.com)
-2. Connect this GitHub repo
-3. Build command: `npm install && npm run build`
-4. Start command: `npm start`
-
-### Deploy Anywhere Else
-
-Standard Node.js HTTP server. Any platform that runs Node 18+ works. The server respects the `PORT` environment variable (most platforms set this automatically).
-
-### Endpoints
-
-| Path | Description |
-|---|---|
-| `/` | Landing page with connection instructions |
-| `/mcp` | MCP Streamable HTTP endpoint (what builders connect to) |
-| `/health` | Health check (returns JSON status) |
+The server will surface relevant recipes, frameworks, methodology, and practitioner references, with attribution and source URLs so you can read the full work.
 
 ---
 
 ## What's Inside
 
-### Resources (Embedded Knowledge)
+### Resources (RTP methodology)
 
-| Resource | What It Contains |
+Nine RTP methodology docs are exposed as MCP resources at stable URIs. Content is fetched live from the commons on each request — update once in the commons, see it everywhere.
+
+| Resource URI | What It Contains |
 |---|---|
-| `core-principles` | Technology accountable to people, the river metaphor, relationships first, asset-based approach, speed of trust |
-| `relational-tech-practice` | The four dimensions: purpose, process (embedded design), math (1:100), path (scale deep, spread horizontal) |
-| `three-layers` | Neighborhood infrastructure layers (relational, information, action) with the Outer Sunset as reference |
-| `builder-spectrum` | Five stages of a builder's journey: curious → experimenting → building → sustaining → scaling |
-| `measurement-framework` | Measuring what matters: agency, belonging, and trust |
-| `embedded-design-guide` | Complete guide to the embedded design methodology |
-| `playbooks` | Step-by-step playbooks: communication channels, gatherings, calendars, mutual aid, asset mapping |
-| `challenges-guide` | Navigating trust, burnout, scale, access, language barriers, conflict, momentum |
-| `network-and-community` | RTP network, adjacent movements, connection patterns for builders |
+| `rtp://knowledge/core-principles` | Technology accountable to people, the river metaphor, relationships first, asset-based approach, speed of trust |
+| `rtp://knowledge/relational-tech-practice` | The four dimensions: purpose, process (embedded design), math (1:100), path (scale deep, spread horizontal) |
+| `rtp://knowledge/three-layers` | Neighborhood infrastructure layers — relational, information, action — with the Outer Sunset as reference |
+| `rtp://knowledge/builder-spectrum` | Five stages of a builder's journey: curious → experimenting → building → sustaining → scaling |
+| `rtp://knowledge/measurement` | Measuring what matters: agency, belonging, and trust |
+| `rtp://knowledge/embedded-design` | Complete guide to the embedded design methodology |
+| `rtp://knowledge/playbooks` | Step-by-step playbooks: communication channels, gatherings, calendars, mutual aid, asset mapping |
+| `rtp://knowledge/challenges` | Navigating trust, burnout, scale, access, language barriers, conflict, momentum |
+| `rtp://knowledge/network` | RTP network, adjacent movements, connection patterns for builders |
 
-### Tools (Live Commons API)
+### Tools (commons API)
 
 | Tool | What It Does |
 |---|---|
-| `search-studio-library` | Search the commons across all kinds (tools, stories, prompts, recipes, references). Full-text ranked. |
-| `get-tool-details` | Look up a specific item with its full body, linked prompts (for tools), and community notes |
-| `find-patterns-by-context` | Describe a builder's situation and get matched to relevant patterns, recipes, tools, and stories |
+| `search-studio-library` | Full-text ranked search across the commons (recipes, frameworks, methodology, references, tools, stories). Filterable by kind. |
+| `get-tool-details` | Full body + community notes + linked items for one item by name match |
+| `find-patterns-by-context` | Describe a builder's situation (with stage/need); returns matched commons items + stage-specific guidance |
 | `suggest-contribution` | Guided framework for shaping a builder's experience into a commons contribution |
-| `get-network-updates` | Latest activity across the relational tech network (powered by the Watcher feed) |
+| `get-network-updates` | Recent activity across the relational tech network (from the Watcher feed) |
 
-### Prompts (Guided Workflows)
+### Prompts (guided workflows)
 
 | Prompt | What It Does |
 |---|---|
-| `practice-guide` | **NEW** — Adopt the Neighboring Commons practice-guide stance for the conversation (relationships-first, asset-based, citing practitioners, inviting contribution) |
+| `practice-guide` | **Start here.** Adopt the Neighboring Commons practice-guide stance for the conversation — relationships-first, asset-based, cite practitioners, calibrate confidence, invite contribution. |
 | `design-neighborhood-tool` | Guided embedded design process for creating neighborhood-scale tools |
 | `assess-relational-soil` | Assess agency, belonging, and trust in a neighborhood |
 | `create-builder-action-plan` | Personalized action plan: this week, this month, this quarter |
 | `remix-existing-tool` | Adapt an existing tool or recipe for a new neighborhood |
 
-### Configuration
+---
 
-The MCP server reads its commons connection from environment variables (with sensible defaults):
+## Endpoints
+
+| Path | Description |
+|---|---|
+| `/` | Landing page with connection instructions |
+| `/mcp` | MCP Streamable HTTP endpoint (what AI tools connect to) |
+| `/health` | Health check returning JSON status, version, and source |
+
+---
+
+## Configuration
+
+The server reads its commons connection from environment variables, all with sensible defaults so it works out of the box:
 
 | Env Var | Default | Purpose |
 |---|---|---|
-| `RTP_COMMONS_URL` | `https://odowkowcinyoxejyzhwl.supabase.co/rest/v1` | REST endpoint for the commons Supabase |
-| `RTP_COMMONS_ANON_KEY` | (baked in) | Public anon key for the commons project (RLS enforces read-only access) |
-| `PORT` | `3000` | HTTP server port (most hosts set this automatically) |
-| `RTP_MCP_TRANSPORT` | `http` | Set to `stdio` for local CLI use |
+| `RTP_COMMONS_URL` | `https://odowkowcinyoxejyzhwl.supabase.co` | Commons Supabase project URL |
+| `RTP_COMMONS_ANON_KEY` | (baked in — public anon key) | Read-only access (RLS enforces canonical-only) |
+| `PORT` | `3000` | HTTP port (most hosts set automatically) |
+| `RTP_MCP_TRANSPORT` | `http` | Set to `stdio` for local CLI mode |
+
+---
+
+## Deploying
+
+Standard Node 18+ HTTP server. `npm install && npm start` is all you need.
+
+### Railway
+
+1. Connect this repo at [railway.app](https://railway.app)
+2. Auto-detects Node.js — deploy
+3. Endpoint at `https://your-app.up.railway.app/mcp`
+
+### Render
+
+1. New Web Service at [render.com](https://render.com)
+2. Build: `npm install && npm run build`
+3. Start: `npm start`
+
+### Anywhere Node 18+
+
+Respects `PORT`. No other configuration required.
+
+---
+
+## How It Fits Together
+
+```
+                     ┌─────────────────────────────────────┐
+                     │  RTP COMMONS (Supabase)             │
+                     │  275+ canonical items               │
+                     │  commons_items + embeddings +       │
+                     │  full-text search RPCs              │
+                     └─────────────┬───────────────────────┘
+                                   │ read (anon key, RLS)
+                          ┌────────▼────────┐
+                          │ rt-mcp-server   │
+                          │ v0.2.0          │
+                          │ (this repo)     │
+                          │                 │
+                          │ mcp.relational  │
+                          │ techproject.org │
+                          └────────┬────────┘
+                                   │ Streamable HTTP
+                                   │
+                ┌──────────────────┼──────────────────┐
+                │                  │                  │
+          Claude Code           Cursor          Claude Desktop
+                                                 + any MCP client
+```
+
+The commons also powers Sidekick in the Relational Tech Studio. Connect your AI to this server and you have access to the same library Sidekick draws from — plus the `practice-guide` prompt and the methodology resources at stable URIs.
 
 ---
 
 ## Contributing
 
-This server is part of the relational tech commons. Contributions welcome:
+This server is open source and part of the broader relational tech commons. PRs welcome.
 
-- **Add patterns**: Built something that works in your neighborhood? It could become an embedded resource.
-- **Improve prompts**: The guided workflows get better with real builder feedback.
-- **Connect new data sources**: Civic commons APIs, local data, and other knowledge bases.
+The most useful contributions right now:
 
----
-
-## Future Directions
-
-- Civic commons API integrations (Civic Tech Field Guide, Connective Tissue, Join 101, Group Hug)
-- Semantic search over the knowledge base
-- Builder profiles for context across sessions
-- Multi-language support
+- **Better commons content**: contribute recipes, stories, or community notes via [studio.relationaltechproject.org/library](https://studio.relationaltechproject.org/library) — the commons grows from there
+- **New MCP tools or prompts**: if you've found a useful query pattern, propose it
+- **Bug reports**: anything broken in how the server formats responses, handles errors, or surfaces items
+- **Civic commons integrations**: connecting more knowledge sources beyond what's in the commons today
 
 ---
 
