@@ -1039,128 +1039,221 @@ const LANDING_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>RTP Relational Tech MCP Server</title>
   <meta name="description" content="Connect any MCP-compatible AI tool to the Relational Tech Project commons — methodology, neighborhood recipes, frameworks, and field references.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:wght@400;600;700;900&display=swap" rel="stylesheet">
   <style>
+    /* Matches Relational Tech Studio's warm-craft palette (HSL tokens)
+       and typography (Fraunces serif headlines, Inter body). */
     :root {
-      --bg: #faf5ee;
-      --surface: #ffffff;
-      --surface-warm: #fff4ec;
-      --ink: #2d2417;
-      --ink-soft: #6b5a45;
-      --ink-quiet: #9c8770;
-      --accent: #b85b3a;
-      --accent-dark: #8b3a1f;
-      --border: #e5d9c4;
-      --code-bg: #f5ecd9;
+      --background: hsl(30, 40%, 92%);
+      --surface: hsl(30, 45%, 96%);
+      --surface-warm: hsl(28, 50%, 94%);
+      --foreground: hsl(20, 30%, 22%);
+      --muted-foreground: hsl(20, 25%, 48%);
+      --quiet: hsl(28, 18%, 58%);
+      --primary: hsl(16, 55%, 50%);
+      --primary-dark: hsl(16, 65%, 38%);
+      --accent: hsl(14, 60%, 55%);
+      --border: hsl(28, 25%, 82%);
+      --code-bg: hsl(28, 30%, 88%);
+      --radius: 0.75rem;
     }
-    * { box-sizing: border-box; }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html { -webkit-text-size-adjust: 100%; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       max-width: 780px;
       margin: 0 auto;
-      padding: 3rem 1.5rem 4rem;
+      padding: 2.5rem 1.25rem 4rem;
       line-height: 1.65;
-      color: var(--ink);
-      background: var(--bg);
+      color: var(--foreground);
+      background: var(--background);
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
-    h1 {
-      font-family: Georgia, "Times New Roman", serif;
-      color: var(--accent-dark);
-      font-size: 2.2rem;
-      margin: 0 0 0.4rem;
+
+    h1, h2, h3 {
+      font-family: 'Fraunces', Georgia, serif;
+      font-weight: 700;
+      letter-spacing: -0.01em;
       line-height: 1.15;
     }
+
+    h1 {
+      color: var(--primary-dark);
+      font-size: clamp(1.75rem, 4.5vw + 0.8rem, 2.6rem);
+      margin: 0 0 0.5rem;
+      font-weight: 900;
+    }
     h2 {
-      font-family: Georgia, serif;
-      color: var(--ink);
-      font-size: 1.4rem;
+      color: var(--foreground);
+      font-size: clamp(1.25rem, 1.5vw + 0.9rem, 1.5rem);
       margin: 2.4rem 0 0.7rem;
     }
     h3 {
       font-size: 1.05rem;
-      margin: 1.6rem 0 0.4rem;
-      color: var(--ink);
+      margin: 1.4rem 0 0.5rem;
+      color: var(--foreground);
+      font-weight: 600;
     }
-    .tagline { color: var(--ink-soft); font-size: 1.05rem; margin: 0 0 1.4rem; }
+
+    p { margin: 0.7rem 0; }
+
+    .tagline {
+      color: var(--muted-foreground);
+      font-size: clamp(0.95rem, 0.4vw + 0.85rem, 1.1rem);
+      margin: 0 0 1.4rem;
+      max-width: 60ch;
+    }
+
     .badge {
       display: inline-block;
-      background: var(--accent);
+      background: var(--primary);
       color: white;
-      padding: 2px 9px;
-      border-radius: 4px;
-      font-size: 0.72em;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.7rem;
       letter-spacing: 0.04em;
-      vertical-align: middle;
+      vertical-align: 0.18em;
       margin-left: 0.4rem;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
     }
+
     .stats {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.6rem;
-      margin: 1.2rem 0 1.8rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+      gap: 0.55rem;
+      margin: 1.2rem 0 2rem;
     }
     .stat {
       background: var(--surface-warm);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.5rem 0.9rem;
+      border-radius: var(--radius);
+      padding: 0.6rem 0.85rem;
       font-size: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.1rem;
     }
-    .stat b { color: var(--accent-dark); font-size: 1.05rem; }
-    .stat span { color: var(--ink-soft); }
+    .stat b {
+      color: var(--primary-dark);
+      font-size: 1.15rem;
+      font-family: 'Fraunces', Georgia, serif;
+      font-weight: 700;
+    }
+    .stat span { color: var(--muted-foreground); font-size: 0.8rem; }
+
     code {
       background: var(--code-bg);
       padding: 2px 6px;
       border-radius: 4px;
-      font-size: 0.88em;
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+      font-size: 0.85em;
+      font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+      word-break: break-word;
     }
+
     pre {
       background: var(--code-bg);
-      padding: 1rem 1.1rem;
-      border-radius: 8px;
+      padding: 0.9rem 1rem;
+      border-radius: var(--radius);
       overflow-x: auto;
-      font-size: 0.85em;
+      -webkit-overflow-scrolling: touch;
+      font-size: 0.82em;
       border: 1px solid var(--border);
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-      line-height: 1.5;
+      font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+      line-height: 1.55;
+      margin: 0.8rem 0;
     }
-    a { color: var(--accent-dark); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
-    a:hover { color: var(--accent); }
-    ul { padding-left: 1.3rem; }
+
+    a {
+      color: var(--primary-dark);
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 2px;
+    }
+    a:hover { color: var(--primary); }
+
+    ul { padding-left: 1.2rem; margin: 0.7rem 0; }
     li { margin: 0.35rem 0; }
+
     .surface {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1.2rem 1.4rem;
+      border-radius: var(--radius);
+      padding: 1.1rem 1.2rem;
       margin: 1rem 0;
     }
-    .quiet { color: var(--ink-quiet); font-size: 0.9rem; }
+
+    .quiet {
+      color: var(--quiet);
+      font-size: 0.88rem;
+      margin-bottom: 0;
+    }
     .quiet em { font-style: italic; }
+
     .endpoint {
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-      background: var(--accent);
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      background: var(--primary);
       color: white;
-      padding: 0.45rem 0.8rem;
+      padding: 0.4rem 0.75rem;
       border-radius: 6px;
       display: inline-block;
-      font-size: 0.92em;
+      font-size: 0.85rem;
+      word-break: break-all;
+      margin-top: 0.25rem;
+    }
+
+    .examples { padding-left: 0; }
+    .examples li {
+      list-style: none;
+      padding-left: 1.3rem;
+      position: relative;
+      margin: 0.5rem 0;
     }
     .examples li::before {
-      content: "→ ";
-      color: var(--accent);
+      content: "→";
+      color: var(--primary);
       font-weight: 700;
+      position: absolute;
+      left: 0;
     }
-    .examples li { list-style: none; margin-left: -1.3rem; }
+
     .footer {
       margin-top: 3rem;
       padding-top: 1.5rem;
       border-top: 1px solid var(--border);
-      color: var(--ink-quiet);
-      font-size: 0.88rem;
+      color: var(--quiet);
+      font-size: 0.85rem;
+    }
+    .footer em {
+      font-family: 'Fraunces', Georgia, serif;
+      font-style: italic;
+      font-size: 0.95rem;
+      color: var(--muted-foreground);
+    }
+
+    /* Mobile tweaks */
+    @media (max-width: 520px) {
+      body {
+        padding: 1.75rem 1rem 3rem;
+        font-size: 15.5px;
+      }
+      pre { font-size: 0.78em; padding: 0.8rem 0.9rem; }
+      .stat { padding: 0.55rem 0.75rem; }
+      .stat b { font-size: 1.05rem; }
+      .badge { display: inline-block; margin-left: 0.3rem; }
+      .surface { padding: 1rem; }
+      h2 { margin-top: 2rem; }
     }
   </style>
 </head>
@@ -1172,7 +1265,7 @@ const LANDING_HTML = `<!DOCTYPE html>
     <div class="stat"><b>275+</b> <span>commons items</span></div>
     <div class="stat"><b>8</b> <span>methodology docs</span></div>
     <div class="stat"><b>7</b> <span>frameworks</span></div>
-    <div class="stat"><b>63</b> <span>neighborhood recipes</span></div>
+    <div class="stat"><b>63</b> <span>recipes</span></div>
     <div class="stat"><b>197</b> <span>field references</span></div>
   </div>
 
@@ -1187,7 +1280,7 @@ const LANDING_HTML = `<!DOCTYPE html>
   }
 }</pre>
 
-  <p><strong>Endpoint:</strong> <span class="endpoint">https://mcp.relationaltechproject.org/mcp</span></p>
+  <p><strong>Endpoint:</strong><br><span class="endpoint">https://mcp.relationaltechproject.org/mcp</span></p>
 
   <div class="surface">
     <h3 style="margin-top:0;">Where this goes</h3>
@@ -1215,7 +1308,7 @@ const LANDING_HTML = `<!DOCTYPE html>
   <h2>What's in the toolbox</h2>
   <p><strong>5 tools</strong>: <code>search-studio-library</code>, <code>get-tool-details</code>, <code>find-patterns-by-context</code>, <code>suggest-contribution</code>, <code>get-network-updates</code></p>
   <p><strong>5 prompts</strong>: <code>practice-guide</code>, <code>design-neighborhood-tool</code>, <code>assess-relational-soil</code>, <code>create-builder-action-plan</code>, <code>remix-existing-tool</code></p>
-  <p><strong>9 resources</strong> at <code>rtp://knowledge/*</code> URIs (the methodology docs, queried live from the commons)</p>
+  <p><strong>9 resources</strong> at <code>rtp://knowledge/*</code> URIs (methodology docs, queried live from the commons)</p>
 
   <h2>Source &amp; details</h2>
   <p>Open source on <a href="https://github.com/The-Relational-Technology-Project/rt-mcp-server">GitHub</a>. See the README for the full architecture, deployment guide, and how the commons works.</p>
