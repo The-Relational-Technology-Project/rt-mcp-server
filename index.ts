@@ -72,6 +72,46 @@ async function commonsRpc(fn: string, body: Record<string, unknown>): Promise<un
 }
 
 // ---------------------------------------------------------------------------
+// Hybrid search — semantic + full-text via the search-commons edge function.
+// The function embeds the query with the same model used for item embeddings
+// (google/gemini-embedding-001) and merges vector + text results. Returns
+// null on any failure so callers can fall back to the full-text RPC.
+// ---------------------------------------------------------------------------
+
+const COMMONS_FUNCTIONS_URL =
+  process.env.RTP_COMMONS_FUNCTIONS_URL ??
+  "https://odowkowcinyoxejyzhwl.supabase.co/functions/v1";
+
+type SearchHit = Partial<CommonsItem> & { similarity?: number; rank?: number; match?: string };
+
+async function searchCommonsHybrid(
+  query: string,
+  filterKinds: string[] | null,
+  count: number
+): Promise<SearchHit[] | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(`${COMMONS_FUNCTIONS_URL}/search-commons`, {
+      method: "POST",
+      headers: {
+        apikey: COMMONS_ANON_KEY,
+        Authorization: `Bearer ${COMMONS_ANON_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query, match_count: count, kinds: filterKinds }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const json = (await res.json()) as { results?: SearchHit[] };
+    return Array.isArray(json.results) ? json.results : null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Contribution Nudges & Templates
 // ---------------------------------------------------------------------------
 
@@ -279,7 +319,7 @@ function registerTools(s: McpServer) {
 The commons is a living, growing resource. Use this to find relevant patterns, tools, and inspiration for a builder's specific context.`,
     {
       query: z.string().optional().describe(
-        "Free-text search query (matches title, summary, tags, body). Leave empty to browse everything."
+        "Free-text search query — semantic, so plain-language descriptions of a need work well (matches meaning, not just keywords). Leave empty to browse everything."
       ),
       kinds: z.array(z.enum(["tool", "story", "prompt", "recipe", "reference", "framework", "methodology"])).optional()
         .describe("Restrict to specific kinds of items. Defaults to tool, story, prompt, recipe."),
@@ -297,13 +337,19 @@ The commons is a living, growing resource. Use this to find relevant patterns, t
         let items: Array<Partial<CommonsItem> & { rank?: number }> = [];
 
         if (query && query.trim().length > 0) {
-          // Use full-text search RPC
-          const rpcResults = await commonsRpc("search_commons_items", {
-            query_text: query,
-            match_count: cap,
-            filter_kinds: filterKinds,
-          }) as Array<Partial<CommonsItem> & { rank?: number }>;
-          items = Array.isArray(rpcResults) ? rpcResults : [];
+          // Hybrid semantic + full-text search; falls back to the FTS RPC
+          // if the search-commons edge function is unreachable
+          const hybrid = await searchCommonsHybrid(query, filterKinds, cap);
+          if (hybrid) {
+            items = hybrid;
+          } else {
+            const rpcResults = await commonsRpc("search_commons_items", {
+              query_text: query,
+              match_count: cap,
+              filter_kinds: filterKinds,
+            }) as Array<Partial<CommonsItem> & { rank?: number }>;
+            items = Array.isArray(rpcResults) ? rpcResults : [];
+          }
         } else {
           // Browse — fetch top items per kind
           const kindFilter = filterKinds.map((k) => `"${k}"`).join(",");
@@ -390,9 +436,21 @@ The commons is a living, growing resource. Use this to find relevant patterns, t
       try {
         const needle = encodeURIComponent(`*${tool_name}*`);
         const kindFilter = kind ? `&kind=eq.${kind}` : "";
-        const items = await commonsFetch(
+        let items = await commonsFetch(
           `/commons_items?select=id,slug,kind,title,summary,body,attribution,source_studio_slug,source_url,tags,parent_slug,metadata&title=ilike.${needle}${kindFilter}&status=eq.canonical&limit=5`
         ) as Array<Partial<CommonsItem>>;
+
+        if (!Array.isArray(items) || items.length === 0) {
+          // Exact title match missed — fall back to hybrid search and fetch
+          // full rows for the closest matches
+          const fallback = await searchCommonsHybrid(tool_name, kind ? [kind] : null, 3);
+          const ids = (fallback ?? []).map((f) => f.id).filter(Boolean);
+          if (ids.length > 0) {
+            items = await commonsFetch(
+              `/commons_items?select=id,slug,kind,title,summary,body,attribution,source_studio_slug,source_url,tags,parent_slug,metadata&id=in.(${ids.join(",")})&status=eq.canonical&limit=3`
+            ) as Array<Partial<CommonsItem>>;
+          }
+        }
 
         if (!Array.isArray(items) || items.length === 0) {
           return {
@@ -511,13 +569,18 @@ The commons is a living, growing resource. Use this to find relevant patterns, t
         results.push("");
       }
 
-      // Live search the commons using the situation as a search query
+      // Live search the commons using the situation as a search query —
+      // semantic first so plain-language situations match well
       try {
-        const matches = await commonsRpc("search_commons_items", {
-          query_text: situation,
-          match_count: 8,
-          filter_kinds: ["recipe", "tool", "story", "framework"],
-        }) as Array<Partial<CommonsItem> & { rank?: number }>;
+        const patternKinds = ["recipe", "tool", "story", "framework"];
+        let matches = await searchCommonsHybrid(situation, patternKinds, 8);
+        if (!matches) {
+          matches = await commonsRpc("search_commons_items", {
+            query_text: situation,
+            match_count: 8,
+            filter_kinds: patternKinds,
+          }) as Array<Partial<CommonsItem> & { rank?: number }>;
+        }
 
         if (Array.isArray(matches) && matches.length > 0) {
           const byKind: Record<string, typeof matches> = {};
@@ -947,7 +1010,7 @@ Guide me through:
 
 const server = new McpServer({
   name: "rtp-relational-tech",
-  version: "0.2.0",
+  version: "0.3.0",
 });
 
 registerResources(server);
@@ -975,7 +1038,7 @@ async function startHTTP() {
 
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", server: "rtp-relational-tech", version: "0.2.0", source: "commons" }));
+      res.end(JSON.stringify({ status: "ok", server: "rtp-relational-tech", version: "0.3.0", source: "commons" }));
       return;
     }
 
@@ -1005,7 +1068,7 @@ async function startHTTP() {
 
         const perSessionServer = new McpServer({
           name: "rtp-relational-tech",
-          version: "0.2.0",
+          version: "0.3.0",
         });
         registerResources(perSessionServer);
         registerTools(perSessionServer);
@@ -1258,15 +1321,16 @@ const LANDING_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <h1>RTP Relational Tech MCP Server <span class="badge">v0.2.0</span></h1>
-  <p class="tagline">Connect any MCP-compatible AI tool to the <a href="https://relationaltechproject.org">Relational Tech Project</a> commons — methodology, neighborhood recipes, frameworks, and field references.</p>
+  <h1>RTP Relational Tech MCP Server <span class="badge">v0.3.0</span></h1>
+  <p class="tagline">Connect any MCP-compatible AI tool to the <a href="https://relationaltechproject.org">Relational Tech Project</a> commons — the Studio's remixable builder tools, stories, and prompts, plus methodology, neighborhood recipes, frameworks, and field references. Search is semantic: describe a need in plain language.</p>
 
   <div class="stats">
-    <div class="stat"><b>275+</b> <span>commons items</span></div>
-    <div class="stat"><b>8</b> <span>methodology docs</span></div>
-    <div class="stat"><b>7</b> <span>frameworks</span></div>
+    <div class="stat"><b>350+</b> <span>commons items</span></div>
+    <div class="stat"><b>25</b> <span>builder tools</span></div>
+    <div class="stat"><b>45</b> <span>builder stories</span></div>
     <div class="stat"><b>63</b> <span>recipes</span></div>
     <div class="stat"><b>197</b> <span>field references</span></div>
+    <div class="stat"><b>15</b> <span>frameworks &amp; methodology</span></div>
   </div>
 
   <h2>Connect</h2>
