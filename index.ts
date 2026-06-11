@@ -143,7 +143,7 @@ Help the builder share these pieces (in conversation, not as a form):
 
 ## How to Submit
 
-Once you've gathered this through conversation, the builder can contribute directly at ${STUDIO_CONTRIBUTE_URL} — they can create an account and add their tool to the commons.
+Once the pieces are gathered, show the builder the final draft and ask if they'd like it sent to the commons stewards. On their yes, call the **submit-contribution** tool — no account needed; a human steward reviews every submission before it joins the commons. Builders who prefer the web can still contribute at ${STUDIO_CONTRIBUTE_URL}.
 
 ## Reminders for the AI
 
@@ -174,7 +174,7 @@ Stories range from a short paragraph to a full narrative. Both are valuable. Let
 
 ## How to Submit
 
-The builder can contribute directly at ${STUDIO_CONTRIBUTE_URL} — create an account and add their story to the commons.
+When the story feels ready, read it back to the builder and ask if they'd like it shared with the commons stewards. On their yes, call the **submit-contribution** tool — a human steward reviews it before it joins the commons. The web option remains at ${STUDIO_CONTRIBUTE_URL}.
 
 ## Reminders for the AI
 
@@ -201,7 +201,7 @@ Community notes are practical wisdom from builders who've used a tool or tried a
 
 ## How to Submit
 
-The builder can add community notes directly at ${STUDIO_CONTRIBUTE_URL} — find the item and add a note.`,
+Once the note is drafted and the builder confirms, call the **submit-contribution** tool with contribution_type "community_note" and related_item_slug set to the item it belongs to (find the slug via search-studio-library). Stewards attach approved notes to the item. The web option remains at ${STUDIO_CONTRIBUTE_URL}.`,
 
   unsure: `# Contributing to the Commons
 
@@ -214,7 +214,7 @@ Not sure what kind of contribution fits? Here's a quick guide:
 
 Ask the builder to describe what they've been working on or experiencing, and help them figure out which type fits. It's also fine to contribute more than one thing!
 
-All contributions can be made at ${STUDIO_CONTRIBUTE_URL} — create an account to get started.`,
+Whichever type fits, gather the pieces conversationally, confirm the draft with the builder, then call the **submit-contribution** tool to send it to the steward review queue. The web option remains at ${STUDIO_CONTRIBUTE_URL}.`,
 };
 
 // ---------------------------------------------------------------------------
@@ -639,7 +639,7 @@ The commons is a living, growing resource. Use this to find relevant patterns, t
 
   s.tool(
     "suggest-contribution",
-    `Help a builder shape their experience into a contribution for the RT commons. Call this when a builder wants to share a tool they built, a story from their neighborhood, a recipe, or a community note. Returns a guided framework the AI can use to help the builder draft their contribution conversationally.`,
+    `Help a builder shape their experience into a contribution for the RT commons. Call this when a builder wants to share a tool they built, a story from their neighborhood, a recipe, or a community note. Returns a guided framework the AI can use to help the builder draft their contribution conversationally. When the draft is ready and the builder has confirmed it, call submit-contribution to send it to the steward review queue.`,
     {
       contribution_type: z.enum(["tool", "story", "community_note", "unsure"]).describe(
         "What the builder wants to contribute"
@@ -665,6 +665,85 @@ The commons is a living, growing resource. Use this to find relevant patterns, t
       ].filter(Boolean).join("\n");
 
       return { content: [{ type: "text" as const, text: header + template }] };
+    }
+  );
+
+  // -------------------------------------------------------------------------
+  // submit-contribution — send a confirmed draft to the steward review queue
+  // -------------------------------------------------------------------------
+
+  s.tool(
+    "submit-contribution",
+    `Submit a builder's contribution to the commons steward review queue. Use AFTER suggest-contribution has guided the conversation and the builder has seen the final draft and explicitly said yes. Nothing publishes immediately — a human steward reviews every submission before it joins the commons, and the builder is credited by name.`,
+    {
+      contribution_type: z.enum(["tool", "story", "recipe", "prompt", "community_note"])
+        .describe("What kind of contribution this is"),
+      title: z.string().describe("Title of the contribution"),
+      summary: z.string().optional().describe("One-paragraph summary, in the builder's own voice"),
+      body: z.string().optional().describe("The full contribution — the story, the tool description plus what you'd tell another builder, the recipe steps, or the note text"),
+      builder_name: z.string().describe("The builder's name for attribution (first name is fine)"),
+      neighborhood: z.string().optional().describe("The builder's neighborhood or place"),
+      contact_email: z.string().optional().describe("Email so stewards can follow up — ask, don't require"),
+      source_url: z.string().optional().describe("Live URL of the tool, if there is one"),
+      tags: z.array(z.string()).optional().describe("Up to 8 short tags"),
+      related_item_slug: z.string().optional().describe("For community notes: slug of the commons item the note is about"),
+      builder_confirmed: z.boolean().describe("Set true only after showing the builder the final draft (including how they'll be credited) and getting their explicit yes. Submitting is an act of consent."),
+    },
+    async ({ contribution_type, title, summary, body, builder_name, neighborhood, contact_email, source_url, tags, related_item_slug, builder_confirmed }) => {
+      if (!builder_confirmed) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Not submitted yet. Show the builder the final draft — title, summary, body, and how they'll be credited — and ask if they'd like it sent to the commons stewards. Call this tool again with builder_confirmed=true once they say yes.`,
+          }],
+        };
+      }
+      try {
+        const res = await fetch(`${COMMONS_FUNCTIONS_URL}/submit-contribution`, {
+          method: "POST",
+          headers: {
+            apikey: COMMONS_ANON_KEY,
+            Authorization: `Bearer ${COMMONS_ANON_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contribution_type, title, summary, body, builder_name,
+            neighborhood, contact_email, source_url, tags, related_item_slug,
+          }),
+        });
+        const json = await res.json() as Record<string, unknown>;
+        if (!res.ok || !json.ok) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `The commons couldn't accept this submission: ${json.error ?? res.statusText}.${res.status === 429 ? " Please try again later." : ` The builder can also contribute via the web at ${STUDIO_CONTRIBUTE_URL}.`}`,
+            }],
+            isError: true,
+          };
+        }
+        return {
+          content: [{
+            type: "text" as const,
+            text: [
+              `# Contribution Submitted`,
+              ``,
+              `**${title}** is in the steward review queue.`,
+              ``,
+              `What happens next: a human steward reads every submission. If it joins the commons, ${builder_name} will be credited${neighborhood ? ` (${neighborhood})` : ""} and the item will appear in the library and the network feed.${contact_email ? " The stewards have the builder's email and will follow up." : ""}`,
+              ``,
+              `Thank the builder — contributions like this are how the commons grows.`,
+            ].join("\n"),
+          }],
+        };
+      } catch (error) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Could not reach the commons submission endpoint: ${error instanceof Error ? error.message : String(error)}. The builder can contribute via the web at ${STUDIO_CONTRIBUTE_URL}.`,
+          }],
+          isError: true,
+        };
+      }
     }
   );
 
@@ -1010,7 +1089,7 @@ Guide me through:
 
 const server = new McpServer({
   name: "rtp-relational-tech",
-  version: "0.3.0",
+  version: "0.4.0",
 });
 
 registerResources(server);
@@ -1038,7 +1117,7 @@ async function startHTTP() {
 
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", server: "rtp-relational-tech", version: "0.3.0", source: "commons" }));
+      res.end(JSON.stringify({ status: "ok", server: "rtp-relational-tech", version: "0.4.0", source: "commons" }));
       return;
     }
 
@@ -1068,7 +1147,7 @@ async function startHTTP() {
 
         const perSessionServer = new McpServer({
           name: "rtp-relational-tech",
-          version: "0.3.0",
+          version: "0.4.0",
         });
         registerResources(perSessionServer);
         registerTools(perSessionServer);
@@ -1321,7 +1400,7 @@ const LANDING_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <h1>RTP Relational Tech MCP Server <span class="badge">v0.3.0</span></h1>
+  <h1>RTP Relational Tech MCP Server <span class="badge">v0.4.0</span></h1>
   <p class="tagline">Connect any MCP-compatible AI tool to the <a href="https://relationaltechproject.org">Relational Tech Project</a> commons — the Studio's remixable builder tools, stories, and prompts, plus methodology, neighborhood recipes, frameworks, and field references. Search is semantic: describe a need in plain language.</p>
 
   <div class="stats">
@@ -1353,7 +1432,7 @@ const LANDING_HTML = `<!DOCTYPE html>
       <li><strong>Claude Desktop</strong> — Settings → Developer → Edit Config</li>
       <li><strong>Cursor, Windsurf, Zed, etc.</strong> — any tool that supports MCP Streamable HTTP</li>
     </ul>
-    <p class="quiet">No API key. No signup. Read-only access enforced by row-level security on the commons database.</p>
+    <p class="quiet">No API key. No signup. Reads are public via row-level security; contributions land in a stewarded review queue — nothing publishes without a human.</p>
   </div>
 
   <h2>Start here: the practice-guide prompt</h2>
@@ -1370,7 +1449,7 @@ const LANDING_HTML = `<!DOCTYPE html>
   <p>Your AI will surface relevant recipes, frameworks, methodology, and practitioner references — with attribution and source URLs so you can read the original work.</p>
 
   <h2>What's in the toolbox</h2>
-  <p><strong>5 tools</strong>: <code>search-studio-library</code>, <code>get-tool-details</code>, <code>find-patterns-by-context</code>, <code>suggest-contribution</code>, <code>get-network-updates</code></p>
+  <p><strong>6 tools</strong>: <code>search-studio-library</code>, <code>get-tool-details</code>, <code>find-patterns-by-context</code>, <code>suggest-contribution</code>, <code>submit-contribution</code>, <code>get-network-updates</code></p>
   <p><strong>5 prompts</strong>: <code>practice-guide</code>, <code>design-neighborhood-tool</code>, <code>assess-relational-soil</code>, <code>create-builder-action-plan</code>, <code>remix-existing-tool</code></p>
   <p><strong>9 resources</strong> at <code>rtp://knowledge/*</code> URIs (methodology docs, queried live from the commons)</p>
 
