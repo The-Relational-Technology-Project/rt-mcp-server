@@ -1,6 +1,6 @@
 {
   "name": "rt-mcp-server",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Hosted MCP service for the Relational Tech Project \u2014 relational tech principles, patterns, and the Studio library, accessible to any AI builder tool via URL",
   "type": "module",
   "main": "dist/index.js",
