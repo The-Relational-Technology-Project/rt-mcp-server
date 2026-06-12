@@ -952,7 +952,9 @@ Guide me through the embedded design process. Don't jump to solutions. Instead:
 - Scale deep in place, spread horizontally through remixing
 - The three layers: relational → information → action
 
-Take your time. This is a conversation, not a checklist.`,
+Take your time. This is a conversation, not a checklist.
+
+When the design feels ready to build, use the create-build-plan prompt to turn this conversation into the two build artifacts (detailed prompt + plan) with lineage and network guidance included.`,
         },
       }],
     })
@@ -1076,7 +1078,87 @@ Guide me through:
 - Start from my place, not from the source
 - Build with neighbors, not for them
 - Small enough to test in a week
-- If it works, contribute it back via suggest-contribution`,
+- If it works, contribute it back via suggest-contribution
+
+When we've designed the remix and I'm ready to build, use the create-build-plan prompt to turn this conversation into the two build artifacts (detailed prompt + plan).`,
+        },
+      }],
+    })
+  );
+
+  // create-build-plan — turn the conversation into Studio-grade build artifacts
+  s.prompt(
+    "create-build-plan",
+    `Turn a builder conversation into a Studio-grade build plan: a detailed paste-ready prompt plus a concrete plan, with lineage, license, and relational-tech network guidance. Use when a builder is ready to move from talking about a tool to building it. Mirrors the build plans generated inside the Relational Tech Studio.`,
+    {
+      builder_name: z.string().optional().describe("The builder's name, if shared"),
+      neighborhood: z.string().optional().describe("The builder's neighborhood or place"),
+      ai_coding_experience: z.string().optional().describe("How much AI-assisted coding the builder has done: never, a_little, regular, or daily"),
+    },
+    ({ builder_name, neighborhood, ai_coding_experience }) => ({
+      messages: [{
+        role: "user",
+        content: {
+          type: "text",
+          text: `You are now the build-plan author for the Relational Tech commons — the same role the Studio's build-plan generator plays. Turn our conversation so far into two artifacts I can copy and run with this afternoon: a detailed prompt and a plan.
+
+## My context
+${builder_name ? `Name: ${builder_name}` : "Name: (ask me)"}
+${neighborhood ? `Neighborhood: ${neighborhood}` : "Neighborhood: (ask me)"}
+${ai_coding_experience ? `AI-coding experience: ${ai_coding_experience}` : "AI-coding experience: (ask me — never / a little / regular / daily)"}
+
+If our conversation hasn't yet covered who the tool is for, the core flows, and the texture of my place, ask me the 2–3 missing questions FIRST — the conversation is the brief, and a thin brief makes a generic plan.
+
+## Ground rules for sources
+- Use get-tool-details on any commons tool we discussed. Tool entries carry "## Remix this tool" (live site, fork repo, Lovable link, hosted option, Studio library page) and "## Lineage" (creators, history) sections. These are real, curated links — they are the ONLY legitimate source for fork links, hosted options, and creator names. Never invent a repo, hosted platform, or creator.
+- Draw on commons items for structure and texture, but do not copy verbatim. My tool is mine, not a fork of a library item — unless we're explicitly forking.
+
+## Artifact 1 — the detailed prompt
+A self-contained markdown spec I will paste into Lovable, Claude Code, Dyad, or Google AI Studio. Sections, as ## headers, in this order:
+
+1. **Purpose** — 1–2 plain sentences; name my neighborhood when the build is tied to place.
+2. **Who it's for** — the specific neighbors, not "users."
+3. **Core flows** — the 2–4 primary actions, as steps.
+4. **Pages / screens** — mark 1–2 "Primary," the rest "Secondary (can be stubbed in v1)."
+5. **Data model in plain English** — objects and fields as sentences; no SQL.
+6. **What's in v1 vs. deferred** — v1 is the smallest thing I can hand to one neighbor.
+7. **Aesthetic, anchored in this place** — warm community-bulletin-board / local-library feel; small palette; 1–2 typography moves that fit this place. Avoid "modern, clean, minimal."
+8. **Guardrails the downstream builder MUST follow** — include as a block: no AI-generated photos, faces, or photo-real illustrations; no large decorative AI artwork; labeled placeholders ("Add a real photo here") instead of generated images; no flowery marketing copy — leave human TODO placeholders so I write key paragraphs in my own voice; mobile-first; few accessible colors, large type.
+9. **Tone of voice** — one paragraph, drawn from how I talk in this chat.
+10. **What "good enough to share with one neighbor" looks like** — three concrete bullets.
+11. **Lineage (include in the README)** — write it ready to paste, 3–4 plain lines: "Built by {my name} in {my neighborhood}" (placeholders if unknown); "Created with the Relational Tech commons (https://studio.relationaltechproject.org) via the RTP MCP server."; and when this remixes a commons tool with a named creator or lineage: "Remixed from {tool} by {creator} — {library page link}", carrying the tool's own lineage note forward so the chain stays unbroken. Attribution is a gift — name people only when the commons data or our chat provides them.
+12. **Join the relational tech network (repo setup)** — a literal instruction block: make the repo public if I'm comfortable; add the relational-tech GitHub topic (terminal: gh repo edit <owner>/<repo> --add-topic relational-tech; or GitHub UI → About → Topics) — one sentence on why (the RTP Watcher discovers public repos with this topic and shares them in the network feed so other neighborhoods can find and remix this work); include an open-source license (MIT is the RTP default); optionally add a .reltech.yml at the repo root:
+
+   version: 2
+   project:
+     name: "{tool name}"
+     description: "{one sentence}"
+     neighborhood: "{my neighborhood}"
+     builder: "{my name}"
+   lineage:
+     remixed_from: "{source tool name}"
+     remixed_from_url: "{source tool's library page link}"
+     creator: "{source tool's creator, when the commons names one}"
+     note: "{source tool's lineage note, carried forward}"
+
+   Include the lineage block only when this build remixes a commons tool; omit any field without real data; leave the block out entirely for original work. If I'm building in Lovable (no terminal), leave a short "Join the network" TODO checklist in the README so the topic step doesn't get lost.
+
+## Artifact 2 — the plan
+Markdown with exactly these three sections:
+
+**1. How will you build this?** Up to three options, ordered by fit: Fork an existing codebase (ONLY when a commons tool we discussed has a real "Fork the code" link — name the source, link the repo, note the README lineage section points back at the original; otherwise omit this option entirely); Build a fresh tool from the prompt above (always available, always the default); Use a hosted platform that already does this (ONLY when the commons shows a real hosted option — link it and name who runs it; otherwise omit). If fresh-build is the only real option, say: "We're adding more fork and hosted-platform options to the Studio as the commons grows — for now, the fresh build path is the strongest one."
+
+**2. Pick your builder tech.** Two tracks. If my AI-coding experience is never or a little: Lovable (plan mode then build mode, paste the detailed prompt as the first message), Lovable hosting + Cloud + email, Namecheap for a domain. If regular or daily: Claude Code (paste the detailed prompt as the brief), Vercel, Neon or Supabase, Resend, Namecheap. Mention Dyad and Google AI Studio as alternates either way.
+
+**3. Share with one neighbor.** A concrete next-90-minutes path: ship the roughest working version; pick one neighbor who will care (name a real candidate type); send the link and ask three specific questions; set a coffee date this week to edit copy together; when the repo exists, make it public and add the relational-tech topic — that's what puts this build in the network feed.
+
+## Title
+Give the plan a short, warm, place-specific title — under 60 characters, noun phrase, no "App"/"Tool"/"Platform" suffix.
+
+## Writing discipline
+Don't invent details about my neighborhood — use placeholders I can fill. No flattery, no emojis, no exclamation points. The two artifacts are copied separately; each must stand alone.
+
+When I've built something from this plan, remind me to share it back to the commons with suggest-contribution → submit-contribution.`,
         },
       }],
     })
@@ -1089,7 +1171,7 @@ Guide me through:
 
 const server = new McpServer({
   name: "rtp-relational-tech",
-  version: "0.4.0",
+  version: "0.5.0",
 });
 
 registerResources(server);
@@ -1117,7 +1199,7 @@ async function startHTTP() {
 
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", server: "rtp-relational-tech", version: "0.4.0", source: "commons" }));
+      res.end(JSON.stringify({ status: "ok", server: "rtp-relational-tech", version: "0.5.0", source: "commons" }));
       return;
     }
 
@@ -1147,7 +1229,7 @@ async function startHTTP() {
 
         const perSessionServer = new McpServer({
           name: "rtp-relational-tech",
-          version: "0.4.0",
+          version: "0.5.0",
         });
         registerResources(perSessionServer);
         registerTools(perSessionServer);
@@ -1400,7 +1482,7 @@ const LANDING_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <h1>RTP Relational Tech MCP Server <span class="badge">v0.4.0</span></h1>
+  <h1>RTP Relational Tech MCP Server <span class="badge">v0.5.0</span></h1>
   <p class="tagline">Connect any MCP-compatible AI tool to the <a href="https://relationaltechproject.org">Relational Tech Project</a> commons — the Studio's remixable builder tools, stories, and prompts, plus methodology, neighborhood recipes, frameworks, and field references. Search is semantic: describe a need in plain language.</p>
 
   <div class="stats">
@@ -1450,7 +1532,7 @@ const LANDING_HTML = `<!DOCTYPE html>
 
   <h2>What's in the toolbox</h2>
   <p><strong>6 tools</strong>: <code>search-studio-library</code>, <code>get-tool-details</code>, <code>find-patterns-by-context</code>, <code>suggest-contribution</code>, <code>submit-contribution</code>, <code>get-network-updates</code></p>
-  <p><strong>5 prompts</strong>: <code>practice-guide</code>, <code>design-neighborhood-tool</code>, <code>assess-relational-soil</code>, <code>create-builder-action-plan</code>, <code>remix-existing-tool</code></p>
+  <p><strong>6 prompts</strong>: <code>practice-guide</code>, <code>design-neighborhood-tool</code>, <code>assess-relational-soil</code>, <code>create-builder-action-plan</code>, <code>remix-existing-tool</code>, <code>create-build-plan</code></p>
   <p><strong>9 resources</strong> at <code>rtp://knowledge/*</code> URIs (methodology docs, queried live from the commons)</p>
 
   <h2>Source &amp; details</h2>
