@@ -54,7 +54,11 @@ Point it at `https://mcp.relationaltechproject.org/mcp` using Streamable HTTP tr
 
 ### Once you're connected
 
-Try invoking the **`practice-guide`** prompt first — it puts your AI into a Neighboring Commons practice-guide stance for the rest of the conversation: relationships-first, asset-based, citing practitioners by name, calibrating confidence honestly, inviting contribution.
+**Building a tool in your own stack?** Invoke the **`relational-builder-stance`** prompt. It loads the principles and working practices that [Relational Builder](https://relationalbuilder.org) builds by (the first build as the core loop alive, one seeded neighbor, every post opening a path to a person, a look that comes from the place) so Claude Code, Cursor, Lovable, or a plain chat builds from the same ground. The same text is available any time through `get-builder-guidance` and the `rtp://builder/*` resources.
+
+**At a community build day with your own tools?** Invoke **`build-day`** with the event code from the room's slide. Your AI sets the Builder stance, looks at what the room has shared (`get-build-day-wall`), pulls the city's live open data when the day has some (`find-civic-data-endpoints`), and when something works pins it to the room's demo wall (`share-to-build-day-wall`) next to the builds made in the Builder itself. Builders who would rather email can send the project to the build day inbox on the slide with the event code in the subject line, a link, and a screenshot; it lands on the same wall.
+
+**Working through a neighborhood question?** Try invoking the **`practice-guide`** prompt first — it puts your AI into a Neighboring Commons practice-guide stance for the rest of the conversation: relationships-first, asset-based, citing practitioners by name, calibrating confidence honestly, inviting contribution.
 
 Then ask things like:
 
@@ -86,6 +90,16 @@ Nine RTP methodology docs are exposed as MCP resources at stable URIs. Content i
 | `rtp://knowledge/challenges` | Navigating trust, burnout, scale, access, language barriers, conflict, momentum |
 | `rtp://knowledge/network` | RTP network, adjacent movements, connection patterns for builders |
 
+### Resources (Relational Builder's principles and practices)
+
+Three more resources at `rtp://builder/*` carry what Relational Builder's own AI builds by. They are generated from the Builder's source on every deploy (`scripts/export-builder-knowledge.mjs` in the relational-builder repo) and served at `relationalbuilder.org/knowledge/*.md`, so this server never holds a stale copy.
+
+| Resource URI | What It Contains |
+|---|---|
+| `rtp://builder/principles` | The principles block every Builder conversation starts from, ready to paste into any system prompt |
+| `rtp://builder/practice` | How Relational Builder builds: what counts as a build, the first build as the core loop, seed one neighbor, relational mechanics, easy for a neighbor, personality from the place, working with the person |
+| `rtp://builder/frames` | Domain frames (civic media, practice-first, relational, microgrants, deliberative) to layer on for particular shapes of project |
+
 ### Tools (commons API)
 
 | Tool | What It Does |
@@ -94,13 +108,28 @@ Nine RTP methodology docs are exposed as MCP resources at stable URIs. Content i
 | `get-tool-details` | Full body + community notes + linked items for one item by name match |
 | `find-patterns-by-context` | Describe a builder's situation (with stage/need); returns matched commons items + stage-specific guidance |
 | `suggest-contribution` | Guided framework for shaping a builder's experience into a commons contribution |
+| `submit-contribution` | Send a confirmed draft to the steward review queue (nothing publishes without a human) |
 | `get-network-updates` | Recent activity across the relational tech network (from the Watcher feed) |
+
+### Tools (Relational Builder bridge)
+
+These reach the Builder's own backend through its `commons-bridge` edge function. No key; the demo wall takes the room's event code.
+
+| Tool | What It Does |
+|---|---|
+| `get-builder-guidance` | The `rtp://builder/*` documents as a tool call (`principles`, `practice`, `frames`, or `all`), for clients that only surface tools |
+| `find-civic-data-endpoints` | A city's live open-data MCP endpoint (keyless, CORS-friendly, run by partner networks) and how to read it from an AI tool or a generated app |
+| `search-prompt-seeds` / `get-prompt-seed` | The seed library: plain-language prompts builders shared from Relational Builder, to grow a tool's own version elsewhere with the author credited |
+| `get-build-day-wall` | One community build day's demo wall, by event code |
+| `share-to-build-day-wall` | Pin a project to that wall from any tool, after the builder has seen the card and said yes |
 
 ### Prompts (guided workflows)
 
 | Prompt | What It Does |
 |---|---|
-| `practice-guide` | **Start here.** Adopt the Neighboring Commons practice-guide stance for the conversation — relationships-first, asset-based, cite practitioners, calibrate confidence, invite contribution. |
+| `practice-guide` | **Start here for questions.** Adopt the Neighboring Commons practice-guide stance for the conversation — relationships-first, asset-based, cite practitioners, calibrate confidence, invite contribution. |
+| `relational-builder-stance` | **Start here for builds.** Build the way Relational Builder does, in any tool: principles as ground, the Builder's practices as method, commons and seeds searched first, the core loop built alive, credit carried. |
+| `build-day` | At a community build day with your own tools: stance, the room's wall, live civic data, build day sizing, and the build pinned to the wall at the end. Takes the event code. |
 | `design-neighborhood-tool` | Guided embedded design process for creating neighborhood-scale tools |
 | `assess-relational-soil` | Assess agency, belonging, and trust in a neighborhood |
 | `create-builder-action-plan` | Personalized action plan: this week, this month, this quarter |
@@ -128,6 +157,8 @@ The server reads its commons connection from environment variables, all with sen
 | `RTP_COMMONS_ANON_KEY` | (baked in — public anon key) | Read-only access (RLS enforces canonical-only) |
 | `PORT` | `3000` | HTTP port (most hosts set automatically) |
 | `RTP_MCP_TRANSPORT` | `http` | Set to `stdio` for local CLI mode |
+| `RTP_BUILDER_SITE_URL` | `https://relationalbuilder.org` | Where the Builder publishes `/knowledge/*.md` |
+| `RTP_BUILDER_BRIDGE_URL` | the Builder project's `commons-bridge` function | The Builder's door for the wall, civic endpoints, and seeds |
 
 ---
 
@@ -165,7 +196,7 @@ Respects `PORT`. No other configuration required.
                                    │ read (anon key, RLS)
                           ┌────────▼────────┐
                           │ rt-mcp-server   │
-                          │ v0.2.0          │
+                          │ v0.7.0          │
                           │ (this repo)     │
                           │                 │
                           │ mcp.relational  │
@@ -177,6 +208,14 @@ Respects `PORT`. No other configuration required.
                 │                  │                  │
           Claude Code           Cursor          Claude Desktop
                                                  + any MCP client
+
+     ┌──────────────────────────────────────────────────────┐
+     │  RELATIONAL BUILDER (relationalbuilder.org)          │
+     │  /knowledge/*.md — principles, practice, frames      │
+     │  commons-bridge  — demo wall, civic endpoints, seeds │
+     │                    + the build day inbox (Resend)    │
+     └──────────────────────────────────────────────────────┘
+                 read by the rt-mcp-server bridge tools
 ```
 
 The commons also powers Sidekick in the Relational Tech Studio. Connect your AI to this server and you have access to the same library Sidekick draws from — plus the `practice-guide` prompt and the methodology resources at stable URIs.

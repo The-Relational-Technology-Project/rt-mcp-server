@@ -1199,17 +1199,364 @@ When I've built something from this plan, remind me to share it back to the comm
 }
 
 // ---------------------------------------------------------------------------
+// Relational Builder bridge
+//
+// The commons above is RTP's shared library. Relational Builder
+// (relationalbuilder.org) is RTP's own build tool, and some of what makes
+// it useful lives in ITS backend rather than the commons: the principles
+// and practices its AI builds by, the live civic-data endpoints partner
+// cities run, the prompt seeds builders share, and each community build
+// day's demo wall. These calls bring that to builders working in their own
+// tools. Reads need no key; the wall takes the room's event code.
+// ---------------------------------------------------------------------------
+
+const BUILDER_SITE_URL =
+  (process.env.RTP_BUILDER_SITE_URL ?? "https://relationalbuilder.org").replace(/\/$/, "");
+
+// The Builder's `commons-bridge` edge function (relational-builder repo,
+// supabase/functions/commons-bridge) — one door for everything below.
+const BUILDER_BRIDGE_URL =
+  process.env.RTP_BUILDER_BRIDGE_URL ??
+  "https://texakzqqenzpxawktbgx.supabase.co/functions/v1/commons-bridge";
+
+async function builderBridge(action: string, body: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+  const res = await fetch(BUILDER_BRIDGE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ...body }),
+  });
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) throw new Error(String(json.error ?? `${res.status} ${res.statusText}`));
+  return json;
+}
+
+// The Builder's principles and practices, as it publishes them — generated
+// from its own source on every deploy (scripts/export-builder-knowledge.mjs
+// in the relational-builder repo), so this server never carries a stale
+// copy. Cached briefly; the documents change at the pace of the code.
+const BUILDER_DOCS = [
+  { slug: "builder-principles", name: "builder-principles", uri: "rtp://builder/principles", title: "Relational Technology Principles, as Relational Builder carries them", description: "The principles block every Relational Builder conversation starts from: purpose, the 90/10 principle, river-garden-commons, relational soil (agency, belonging, trust), the practice cycle, what AI should and must not do, open source and remixing, stewardship. Paste it into any AI tool's system prompt." },
+  { slug: "builder-practice",   name: "builder-practice",   uri: "rtp://builder/practice",   title: "How Relational Builder builds", description: "The working practices behind Relational Builder, with no stack in them: what counts as a build (programs and flyers too), the first build as the core loop alive, seed one neighbor, real records come from the person, relational mechanics (bonding and bridging, every post opens a path to a person, pair asks with offers), easy for a neighbor, personality from the place, working with the person." },
+  { slug: "builder-frames",     name: "builder-frames",     uri: "rtp://builder/frames",     title: "Domain frames", description: "Principle sets that layer onto the base principles for particular shapes of project: civic media, practice-first, relational, microgrants (a gathering fund), deliberative. Pick the one that fits and add it after the principles." },
+] as const;
+
+type BuilderDocSlug = (typeof BUILDER_DOCS)[number]["slug"];
+
+const BUILDER_DOC_TTL_MS = 10 * 60 * 1000;
+const builderDocCache = new Map<string, { text: string; at: number }>();
+
+async function fetchBuilderDoc(slug: BuilderDocSlug): Promise<string> {
+  const hit = builderDocCache.get(slug);
+  if (hit && Date.now() - hit.at < BUILDER_DOC_TTL_MS) return hit.text;
+  const res = await fetch(`${BUILDER_SITE_URL}/knowledge/${slug}.md`, { headers: { Accept: "text/markdown, text/plain" } });
+  if (!res.ok) throw new Error(`Could not load ${slug} from ${BUILDER_SITE_URL} (${res.status})`);
+  const raw = await res.text();
+  // The Builder is a single-page app: an unknown path answers with the app
+  // shell, not a 404. A document that isn't markdown isn't the document.
+  if (/^\s*<!doctype html|^\s*<html/i.test(raw)) {
+    throw new Error(`${slug}.md is not published at ${BUILDER_SITE_URL}/knowledge/ yet`);
+  }
+  const text = raw.replace(/^<!--[\s\S]*?-->\s*/, "");
+  builderDocCache.set(slug, { text, at: Date.now() });
+  return text;
+}
+
+function registerBuilderResources(s: McpServer) {
+  for (const d of BUILDER_DOCS) {
+    s.resource(d.name, d.uri, { description: d.description, mimeType: "text/markdown" }, async () => ({
+      contents: [{ uri: d.uri, text: await fetchBuilderDoc(d.slug), mimeType: "text/markdown" }],
+    }));
+  }
+}
+
+function fmtWallEntry(e: Record<string, unknown>, i: number): string {
+  const lines = [`${i + 1}. **${e.project_name ?? "Untitled"}**${e.builder_name ? ` — ${e.builder_name}` : ""}${e.submitted_via && e.submitted_via !== "builder" ? " _(built with their own tools)_" : ""}`];
+  if (e.one_liner) lines.push(`   ${e.one_liner}`);
+  const links: string[] = [];
+  if (e.demo_url) links.push(`[open the app](${e.demo_url})`);
+  if (e.deck_url) links.push(`[slides](${e.deck_url})`);
+  if (e.screenshot_url) links.push(`[screenshot](${e.screenshot_url})`);
+  if (links.length) lines.push(`   ${links.join(" · ")}`);
+  if (e.contact_value) lines.push(`   ${e.contact_label ?? "Contact"}: ${e.contact_value}`);
+  return lines.join("\n");
+}
+
+function registerBuilderTools(s: McpServer) {
+  // -------------------------------------------------------------------------
+  // get-builder-guidance — RB's principles and practices, for any tool.
+  // Resources carry the same text; the tool is for clients that only
+  // surface tools, and for an AI that wants to pull a section mid-build.
+  // -------------------------------------------------------------------------
+
+  s.tool(
+    "get-builder-guidance",
+    `Get the principles and working practices Relational Builder (relationaltechproject.org's own build tool) builds by — so a builder working in Claude Code, Cursor, Lovable, or any other AI tool builds from the same ground. Call this at the start of any neighborhood-tool build and keep it in context: "principles" is the block to adopt as a system prompt; "practice" is how to size, seed, shape, and hand off a community tool (the first build as the core loop alive, seed one neighbor, relational mechanics, easy for a neighbor, personality from the place); "frames" are add-on principle sets for particular shapes of project (civic media, practice-first, relational, microgrants, deliberative).`,
+    {
+      topic: z.enum(["principles", "practice", "frames", "all"]).default("all")
+        .describe("Which document. 'all' returns principles, practice, then frames."),
+    },
+    async ({ topic }) => {
+      const slugs: BuilderDocSlug[] =
+        topic === "all" ? ["builder-principles", "builder-practice", "builder-frames"]
+        : topic === "principles" ? ["builder-principles"]
+        : topic === "practice" ? ["builder-practice"]
+        : ["builder-frames"];
+      try {
+        const parts = await Promise.all(slugs.map(fetchBuilderDoc));
+        const footer = `\n\n---\n\n_These documents are generated from Relational Builder's own source and served at ${BUILDER_SITE_URL}/knowledge/. When your build draws on them, say so in the README: "Built with the Relational Tech Project's principles and practices (${BUILDER_SITE_URL})."_`;
+        return { content: [{ type: "text" as const, text: parts.join("\n\n---\n\n") + footer }] };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: `Could not load the Builder's guidance: ${error instanceof Error ? error.message : String(error)}. The documents are also readable directly at ${BUILDER_SITE_URL}/knowledge/builder-practice.md.` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // -------------------------------------------------------------------------
+  // find-civic-data-endpoints — live city open data, as MCP servers.
+  // -------------------------------------------------------------------------
+
+  s.tool(
+    "find-civic-data-endpoints",
+    `Find a city's live open-data MCP endpoint (run by partner networks, currently the Responsive Cities Network). Each is a keyless MCP server over plain HTTP JSON-RPC with permissive CORS: your AI tool can connect to it directly to read the city's real datasets, and a generated app can call it from the browser with fetch. Use this when a build touches a city's parcels, permits, services, transit, or any civic record — real rows from the city beat invented data every time.`,
+    {
+      city: z.string().optional().describe("City name or part of one (e.g. 'Boulder', 'Charlotte, NC'). Leave empty to list every city with an endpoint."),
+    },
+    async ({ city }) => {
+      try {
+        const json = await builderBridge("civic_endpoints", city ? { city } : {});
+        const rows = (json.endpoints as Record<string, unknown>[]) ?? [];
+        if (rows.length === 0) {
+          return { content: [{ type: "text" as const, text: city ? `No live civic-data endpoint for "${city}" yet. Call without a city to see which cities have one, or search the web for the city's open-data portal and load a public dataset by URL.` : "No civic-data endpoints are registered right now." }] };
+        }
+        const list = rows.map(r => `- **${r.city}** (${r.kind}) — \`${r.mcp_url}\`${r.notes ? `\n  ${r.notes}` : ""}`).join("\n");
+        const howTo = [
+          "",
+          "## How to use one",
+          "",
+          "- **In your AI tool:** add the endpoint as an MCP server (Streamable HTTP), then ask for the city's datasets. Tool names differ by portal (`arcgis__*`, `ckan__*`, and others), so start with the tool list.",
+          "- **In a generated app:** discover with `tools/list`, read with `tools/call`:",
+          "",
+          "```js",
+          "const r = await fetch(MCP_URL, {",
+          "  method: 'POST',",
+          "  headers: { 'content-type': 'application/json', accept: 'application/json' },",
+          "  body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),",
+          "});",
+          "```",
+          "",
+          "- Prefer \"the app reads it live from the city endpoint\" over pasting a snapshot into a file. Say where the data came from, in one line, in the app.",
+        ].join("\n");
+        return { content: [{ type: "text" as const, text: `# Live civic data endpoints\n\n${list}\n${howTo}` }] };
+      } catch (error) {
+        return { content: [{ type: "text" as const, text: `Could not reach the endpoint registry: ${error instanceof Error ? error.message : String(error)}` }], isError: true };
+      }
+    }
+  );
+
+  // -------------------------------------------------------------------------
+  // search-prompt-seeds / get-prompt-seed — the seed library.
+  // -------------------------------------------------------------------------
+
+  s.tool(
+    "search-prompt-seeds",
+    `Search the prompt seeds builders have shared from Relational Builder. A seed is the plain-language description that grew a working neighborhood tool, with the place-specific parts marked for adaptation — the artifact that actually spreads between neighborhoods. Find one that is close to what a builder wants, then get-prompt-seed for the full text to grow their own version in their own tool, credited to the seed's author.`,
+    {
+      query: z.string().optional().describe("Plain words for what the builder wants (e.g. 'tool lending library', 'block party RSVP'). Leave empty to browse the newest."),
+      limit: z.number().optional().describe("Max results (default 12, max 40)"),
+    },
+    async ({ query, limit }) => {
+      try {
+        const json = await builderBridge("seeds", { query, limit });
+        const seeds = (json.seeds as Record<string, unknown>[]) ?? [];
+        if (seeds.length === 0) {
+          return { content: [{ type: "text" as const, text: `No shared seeds match${query ? ` "${query}"` : ""} yet. The commons' tools and recipes (search-studio-library) are the next place to look — and a builder who grows something new can share its seed from Relational Builder.` }] };
+        }
+        const list = seeds.map(sd => [
+          `### ${sd.title}`,
+          sd.author_name ? `*shared by ${sd.author_name}*` : "",
+          `slug: \`${sd.share_slug}\` · [open in Relational Builder](${sd.url})`,
+          "",
+          String(sd.excerpt ?? ""),
+        ].filter(Boolean).join("\n")).join("\n\n");
+        return { content: [{ type: "text" as const, text: `# Prompt seeds\n\n${list}\n\n---\n\nCall get-prompt-seed with a slug for the full seed. A seed is grown, not copied: keep its relational core, change the specifics to this builder's place, and credit the author in the README.` }] };
+      } catch (error) {
+        return { content: [{ type: "text" as const, text: `Could not search seeds: ${error instanceof Error ? error.message : String(error)}` }], isError: true };
+      }
+    }
+  );
+
+  s.tool(
+    "get-prompt-seed",
+    `Get the full text of one shared prompt seed by its slug (from search-prompt-seeds). Use it as the brief for a build in the builder's own tool, adapted to their neighborhood, with the author credited.`,
+    {
+      share_slug: z.string().describe("The seed's slug"),
+    },
+    async ({ share_slug }) => {
+      try {
+        const json = await builderBridge("seed", { share_slug });
+        const sd = json.seed as Record<string, unknown>;
+        return { content: [{ type: "text" as const, text: `# ${sd.title}\n\n${sd.author_name ? `*Seed shared by ${sd.author_name}* · ` : ""}[open in Relational Builder](${sd.url})\n\n${sd.body}\n\n---\n\n_Grown from a prompt seed shared through Relational Builder${sd.author_name ? ` by ${sd.author_name}` : ""}. Carry that line into the README._` }] };
+      } catch (error) {
+        return { content: [{ type: "text" as const, text: `Could not load that seed: ${error instanceof Error ? error.message : String(error)}` }], isError: true };
+      }
+    }
+  );
+
+  // -------------------------------------------------------------------------
+  // get-build-day-wall / share-to-build-day-wall — the room's demo wall.
+  // -------------------------------------------------------------------------
+
+  s.tool(
+    "get-build-day-wall",
+    `See what a community build day's room has built so far: the demo wall for one event, by its event code (the room key on the slide and the QR card). Builds appear in the order they were shared, with links, so a builder can see neighbors' work and the host can present the room.`,
+    {
+      event_code: z.string().describe("The event code, e.g. BUILDJAM"),
+    },
+    async ({ event_code }) => {
+      try {
+        const json = await builderBridge("wall", { event_code });
+        const ev = json.event as { code: string; name: string };
+        const entries = (json.entries as Record<string, unknown>[]) ?? [];
+        const body = entries.length === 0
+          ? "Nothing on the wall yet — this builder could be first."
+          : entries.map(fmtWallEntry).join("\n\n");
+        return { content: [{ type: "text" as const, text: `# ${ev.name} — the wall\n\n${body}\n\n---\n\nPresent the room: ${json.wall_url}\nShare this builder's own work with share-to-build-day-wall.` }] };
+      } catch (error) {
+        return { content: [{ type: "text" as const, text: `Could not read the wall: ${error instanceof Error ? error.message : String(error)}` }], isError: true };
+      }
+    }
+  );
+
+  s.tool(
+    "share-to-build-day-wall",
+    `Pin a builder's project to their community build day's demo wall — the gallery the room presents from at the end of the day — from whatever tool they built it in. Needs the event code (the room key on the slide or QR card) and a project name; a one-line description, a link to the live tool, a screenshot, and a way to reach the builder make the card. Call ONLY after the builder has seen what the card will say and said yes: the wall is public to the room, and the card carries their name. Re-sharing the same project (with the same email) replaces the earlier card.`,
+    {
+      event_code: z.string().describe("The event code, e.g. BUILDJAM"),
+      project_name: z.string().describe("What the project is called (the card's title)"),
+      builder_name: z.string().optional().describe("The builder's name as it should appear on the card (first name is fine)"),
+      one_liner: z.string().optional().describe("One sentence on what it does and who it's for, in the builder's words"),
+      demo_url: z.string().optional().describe("Link to the live tool, if it's deployed anywhere (a repo link is fine too)"),
+      screenshot_data_url: z.string().optional().describe("A screenshot as a data URL (png/jpeg/webp, under 4MB). Optional but it makes the card."),
+      contact_label: z.string().optional().describe("How the builder wants to be reached, if at all: 'Email', 'Phone', 'Website', or their own word"),
+      contact_value: z.string().optional().describe("The matching value. Only if the builder offered it — the wall is public to the room."),
+      email: z.string().optional().describe("The builder's email, so a re-share replaces their card and the host can follow up. Not shown on the wall."),
+      builder_confirmed: z.boolean().describe("Set true only after showing the builder the card (name, project, line, link) and getting their explicit yes."),
+    },
+    async ({ event_code, project_name, builder_name, one_liner, demo_url, screenshot_data_url, contact_label, contact_value, email, builder_confirmed }) => {
+      if (!builder_confirmed) {
+        return { content: [{ type: "text" as const, text: `Not shared yet. Show the builder the card — **${project_name}**${builder_name ? ` by ${builder_name}` : ""}${one_liner ? `: ${one_liner}` : ""}${demo_url ? ` (${demo_url})` : ""} — and ask if it should go on the ${event_code} wall. Call again with builder_confirmed=true once they say yes.` }] };
+      }
+      try {
+        const json = await builderBridge("share", {
+          event_code, project_name, builder_name, one_liner, demo_url,
+          screenshot: screenshot_data_url, contact_label, contact_value, email, via: "mcp",
+        });
+        const ev = json.event as { code: string; name: string };
+        return { content: [{ type: "text" as const, text: [
+          `# On the wall`,
+          ``,
+          `**${project_name}** is pinned to the ${ev.name} wall${builder_name ? `, credited to ${builder_name}` : ""}.`,
+          ``,
+          `The room's wall: ${json.wall_url}`,
+          ``,
+          `Two things worth offering now: a one-line tip on the wall about what they'd tell the next builder, and — if this build is something another neighborhood could learn from — contributing it to the commons with suggest-contribution, so it outlives today.`,
+        ].join("\n") }] };
+      } catch (error) {
+        return { content: [{ type: "text" as const, text: `Couldn't pin to the wall: ${error instanceof Error ? error.message : String(error)}. The builder can also email the build to the room's inbox (the address is on the slide) or show it to a host.` }], isError: true };
+      }
+    }
+  );
+}
+
+function registerBuilderPrompts(s: McpServer) {
+  // relational-builder-stance — build like the Builder does, in any tool
+  s.prompt(
+    "relational-builder-stance",
+    `Build a neighborhood tool the way Relational Builder does, in whatever tool you're using: load the RTP principles and the Builder's practices, work in the person's own words, size the first build to the core loop, seed one neighbor, make every post open a path to a person, and credit the commons. Use at the start of a build in Claude Code, Cursor, Lovable, or a chat.`,
+    {
+      neighborhood: z.string().optional().describe("The builder's neighborhood or place, if known"),
+      what: z.string().optional().describe("What they want to build, in their words, if already said"),
+    },
+    ({ neighborhood, what }) => ({
+      messages: [{
+        role: "user",
+        content: {
+          type: "text",
+          text: `For this build, work the way Relational Builder works.
+
+First, call \`get-builder-guidance\` with topic "all" and hold what comes back as your operating stance: the Relational Technology principles are the ground; "How Relational Builder builds" is the practice; pick a frame only if the project has that shape.
+
+${neighborhood ? `My neighborhood: ${neighborhood}\n` : ""}${what ? `What I want to build: ${what}\n` : ""}
+Then:
+
+1. **Understand before building.** If you don't yet know who this is for, the one thing it's for, and what the place is like, ask me the two or three questions that matter — one at a time, plain words. Search the commons (\`search-studio-library\`, \`find-patterns-by-context\`) and the seed library (\`search-prompt-seeds\`) for what neighbors elsewhere have already lived with, and tell me what you found and who made it.
+2. **Agree on what "the build" is.** Software, a program plan, printable materials, or a mix. Many community projects start with the inviting artifacts, not an app.
+3. **Build the core loop, alive.** The one interaction this exists for, end to end on a handful of seeded records and ONE demo neighbor. No external backend, no keys, nothing to configure before something shows. Then stop and name what's next.
+4. **Keep it relational.** Every item carries a person; every post opens a path to a person; asks are paired with offers; a visible steward; design toward meeting in person. If it's collapsing into a directory of links, say so and fix it.
+5. **Make it theirs.** One concrete visual direction from this place, not the default cream-and-serif look. Real photos first, local artists second, generated images last.
+6. **Credit and close the loop.** Name the commons items and seeds the build drew on, in the README and in the app. When something works, offer \`suggest-contribution\` so the next neighborhood starts further along.
+
+Talk about what I'll see, print, and hand out — not the machinery. No flattery. Start with the questions, or if you have enough, say in one line what you'll build first and build it.`,
+        },
+      }],
+    })
+  );
+
+  // build-day — at a community build day with your own tools
+  s.prompt(
+    "build-day",
+    `For a builder at a community build day who brought their own AI tool instead of using Relational Builder in the browser. Sets the Relational Builder stance, pulls in the room's live civic data when the day has some, and ends by putting the build on the room's demo wall with share-to-build-day-wall. Give it the event code from the slide.`,
+    {
+      event_code: z.string().describe("The event code on the room's slide or QR card"),
+      builder_name: z.string().optional().describe("The builder's first name"),
+      neighborhood: z.string().optional().describe("Their neighborhood or place"),
+    },
+    ({ event_code, builder_name, neighborhood }) => ({
+      messages: [{
+        role: "user",
+        content: {
+          type: "text",
+          text: `I'm at a community build day (event code **${event_code}**)${builder_name ? `, I'm ${builder_name}` : ""}${neighborhood ? `, building for ${neighborhood}` : ""}, and I'm building with you instead of in the Relational Builder app. Help me end the day with something real on the room's wall.
+
+**Set the stance.** Call \`get-builder-guidance\` ("all") and work by it for the rest of this conversation: principles as ground, the Builder's practices as method, plain words throughout, no flattery.
+
+**See the room.** Call \`get-build-day-wall\` with ${event_code} so we both know what neighbors here have already shared, and so I'm not building the same thing twice without meaning to.
+
+**Start from what exists.** Before designing, look for a seed (\`search-prompt-seeds\`) or a commons tool or recipe (\`search-studio-library\`) close to what I want, and tell me who made it. Remixing is how relational tech spreads.
+
+**Real data if the day has it.** If my build touches a city's records, call \`find-civic-data-endpoints\` and prefer reading the real rows live over inventing any. When nothing real is in reach, build on a handful of obviously approximate rows and say so plainly in the app and to me. Never invent people presented as real residents.
+
+**Build day sizing.** A few hours, a demo at the end. Build the core loop completely, on seeded data, with one demo neighbor — then stop and polish rather than start a second screen. Everything I'll want after today goes in a short "next" list.
+
+**Put it on the wall.** When something works, draft my card — project name, one line in my words, link if it's deployed, screenshot if I can give you one, my name — show it to me, and once I say yes call \`share-to-build-day-wall\` with builder_confirmed=true. Then tell me the wall link so I can see it next to everyone else's.
+
+**Give it a life after today.** If what we built could help another neighborhood, offer to shape it into a commons contribution (\`suggest-contribution\`).
+
+If you need to know who this is for, the one thing it's for, or what my place is like, ask me now — one question at a time.`,
+        },
+      }],
+    })
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Create the MCP Server (used for stdio mode)
 // ---------------------------------------------------------------------------
 
 const server = new McpServer({
   name: "rtp-relational-tech",
-  version: "0.6.0",
+  version: "0.7.0",
 });
 
 registerResources(server);
+registerBuilderResources(server);
 registerTools(server);
+registerBuilderTools(server);
 registerPrompts(server);
+registerBuilderPrompts(server);
 
 // ---------------------------------------------------------------------------
 // Start the Server
@@ -1232,7 +1579,7 @@ async function startHTTP() {
 
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", server: "rtp-relational-tech", version: "0.6.0", source: "commons" }));
+      res.end(JSON.stringify({ status: "ok", server: "rtp-relational-tech", version: "0.7.0", source: "commons" }));
       return;
     }
 
@@ -1262,11 +1609,14 @@ async function startHTTP() {
 
         const perSessionServer = new McpServer({
           name: "rtp-relational-tech",
-          version: "0.6.0",
+          version: "0.7.0",
         });
         registerResources(perSessionServer);
+        registerBuilderResources(perSessionServer);
         registerTools(perSessionServer);
+        registerBuilderTools(perSessionServer);
         registerPrompts(perSessionServer);
+        registerBuilderPrompts(perSessionServer);
         await perSessionServer.connect(transport);
       }
 
@@ -1298,7 +1648,7 @@ const LANDING_HTML = `<!DOCTYPE html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>RTP Relational Tech MCP Server</title>
-  <meta name="description" content="Connect any MCP-compatible AI tool to the Relational Tech Project commons — methodology, neighborhood recipes, frameworks, and field references.">
+  <meta name="description" content="Connect any MCP-compatible AI tool to the Relational Tech Project commons — methodology, neighborhood recipes, frameworks, field references, live civic data, prompt seeds, and the build day wall — plus the principles and practices Relational Builder builds by.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:wght@400;600;700;900&display=swap" rel="stylesheet">
@@ -1550,8 +1900,12 @@ const LANDING_HTML = `<!DOCTYPE html>
     <p class="quiet">No API key. No signup. Reads are public via row-level security; contributions land in a stewarded review queue — nothing publishes without a human.</p>
   </div>
 
-  <h2>Start here: the practice-guide prompt</h2>
+  <h2>Start here: two prompts</h2>
   <p>Once connected, invoke the <code>practice-guide</code> prompt to put your AI in a Neighboring Commons practice-guide stance for the rest of the conversation: relationships-first, asset-based, citing practitioners by name, calibrating confidence honestly.</p>
+  <p>Building a tool? Invoke <code>relational-builder-stance</code> instead. It loads the principles and working practices <a href="https://relationalbuilder.org">Relational Builder</a> builds by, so Claude Code, Cursor, Lovable, or a chat window builds from the same ground: the first build as the core loop alive, one seeded neighbor, every post opening a path to a person, a look that comes from the place.</p>
+
+  <h2>At a community build day with your own tools</h2>
+  <p>Invoke the <code>build-day</code> prompt with the event code from the room's slide. Your AI sets the Builder stance, looks at what the room has already shared, pulls the city's live open data when the day has some, sizes the build for an afternoon, and when something works pins it to the room's demo wall with <code>share-to-build-day-wall</code>, next to the builds made in the Builder itself. Prefer email? Send the project to the build day inbox on the slide with the event code in the subject line, a link, and a screenshot.</p>
 
   <h2>What you can ask</h2>
   <ul class="examples">
@@ -1564,9 +1918,9 @@ const LANDING_HTML = `<!DOCTYPE html>
   <p>Your AI will surface relevant recipes, frameworks, methodology, and practitioner references — with attribution and source URLs so you can read the original work.</p>
 
   <h2>What's in the toolbox</h2>
-  <p><strong>6 tools</strong>: <code>search-studio-library</code>, <code>get-tool-details</code>, <code>find-patterns-by-context</code>, <code>suggest-contribution</code>, <code>submit-contribution</code>, <code>get-network-updates</code></p>
-  <p><strong>6 prompts</strong>: <code>practice-guide</code>, <code>design-neighborhood-tool</code>, <code>assess-relational-soil</code>, <code>create-builder-action-plan</code>, <code>remix-existing-tool</code>, <code>create-build-plan</code></p>
-  <p><strong>9 resources</strong> at <code>rtp://knowledge/*</code> URIs (methodology docs, queried live from the commons)</p>
+  <p><strong>12 tools</strong>: <code>search-studio-library</code>, <code>get-tool-details</code>, <code>find-patterns-by-context</code>, <code>suggest-contribution</code>, <code>submit-contribution</code>, <code>get-network-updates</code>, <code>get-builder-guidance</code>, <code>find-civic-data-endpoints</code>, <code>search-prompt-seeds</code>, <code>get-prompt-seed</code>, <code>get-build-day-wall</code>, <code>share-to-build-day-wall</code></p>
+  <p><strong>8 prompts</strong>: <code>practice-guide</code>, <code>relational-builder-stance</code>, <code>build-day</code>, <code>design-neighborhood-tool</code>, <code>assess-relational-soil</code>, <code>create-builder-action-plan</code>, <code>remix-existing-tool</code>, <code>create-build-plan</code></p>
+  <p><strong>12 resources</strong>: 9 methodology docs at <code>rtp://knowledge/*</code> (queried live from the commons) and 3 at <code>rtp://builder/*</code> — Relational Builder's principles, practices, and domain frames, generated from its source on every deploy</p>
 
   <h2>Source &amp; details</h2>
   <p>Open source on <a href="https://github.com/The-Relational-Technology-Project/rt-mcp-server">GitHub</a>. See the README for the full architecture, deployment guide, and how the commons works.</p>
