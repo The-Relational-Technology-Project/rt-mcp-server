@@ -119,6 +119,7 @@ These reach the Builder's own backend through its `commons-bridge` edge function
 |---|---|
 | `get-builder-guidance` | The `rtp://builder/*` documents as a tool call (`principles`, `practice`, `frames`, or `all`), for clients that only surface tools |
 | `find-civic-data-endpoints` | A city's live open-data MCP endpoint (keyless, CORS-friendly, run by partner networks) and how to read it from an AI tool or a generated app |
+| `find-place-commons` | A place's own commons (a Knowy place pack): local knowledge kept by neighbors, with a design brief, real records, and live endpoints for a build |
 | `search-prompt-seeds` / `get-prompt-seed` | The seed library: plain-language prompts builders shared from Relational Builder, to grow a tool's own version elsewhere with the author credited |
 | `get-build-day-wall` | One community build day's demo wall, by event code |
 | `share-to-build-day-wall` | Pin a project to that wall from any tool, after the builder has seen the card and said yes |

@@ -1327,7 +1327,9 @@ function registerBuilderTools(s: McpServer) {
     async ({ city }) => {
       try {
         const json = await builderBridge("civic_endpoints", city ? { city } : {});
-        const rows = (json.endpoints as Record<string, unknown>[]) ?? [];
+        // Place commons (kind "place") share the registry but are a different kind of thing,
+        // with their own tool: find-place-commons.
+        const rows = ((json.endpoints as Record<string, unknown>[]) ?? []).filter(r => r.kind !== "place");
         if (rows.length === 0) {
           return { content: [{ type: "text" as const, text: city ? `No live civic-data endpoint for "${city}" yet. Call without a city to see which cities have one, or search the web for the city's open-data portal and load a public dataset by URL.` : "No civic-data endpoints are registered right now." }] };
         }
@@ -1352,6 +1354,55 @@ function registerBuilderTools(s: McpServer) {
         return { content: [{ type: "text" as const, text: `# Live civic data endpoints\n\n${list}\n${howTo}` }] };
       } catch (error) {
         return { content: [{ type: "text" as const, text: `Could not reach the endpoint registry: ${error instanceof Error ? error.message : String(error)}` }], isError: true };
+      }
+    }
+  );
+
+  // -------------------------------------------------------------------------
+  // find-place-commons — a place's own commons, kept by its neighbors.
+  // Same registry as the civic endpoints (kind "place"); a different contract.
+  // -------------------------------------------------------------------------
+
+  s.tool(
+    "find-place-commons",
+    `Find a place's own commons: public local knowledge kept by the neighbors who live there, reviewed by neighborhood stewards, and served by the place's own agent (a Knowy) as a keyless MCP endpoint. Call this at the start of any build for a specific neighborhood, block, or community, before designing anything. If the place has a commons, connect to it and call its design_brief tool with the idea: it returns what already exists there that does something similar, who to talk to first, and the live data the build can read. The global commons (search-studio-library) says what has worked elsewhere; a place commons says what is true here.`,
+    {
+      place: z.string().optional().describe("The place's name or part of it (e.g. 'Outer Sunset'). Leave empty to list every place with a commons."),
+    },
+    async ({ place }) => {
+      try {
+        const json = await builderBridge("civic_endpoints", place ? { city: place } : {});
+        const rows = ((json.endpoints as Record<string, unknown>[]) ?? []).filter(r => r.kind === "place");
+        if (rows.length === 0) {
+          return { content: [{ type: "text" as const, text: place
+            ? `No place commons is registered for "${place}" yet. Call without a place to see which places have one. Without a local commons: ask the builder who already does this work nearby and build the first version with them. A place can start its own from the gallery entry "Build: A Knowy for Your Place" in Relational Builder (${BUILDER_SITE_URL}).`
+            : "No place commons are registered right now." }] };
+        }
+        const site = (r: Record<string, unknown>) => String(r.mcp_url).replace(/\/mcp\/?$/, "");
+        const list = rows.map(r => `- **${r.city}** — MCP: \`${r.mcp_url}\` · overview: \`${site(r)}/place.json\` · records: \`${site(r)}/records.json\`${r.notes ? `\n  ${r.notes}` : ""}`).join("\n");
+        const howTo = [
+          "",
+          "## How to build with one",
+          "",
+          "Add the endpoint to your AI tool as an MCP server (Streamable HTTP, no key), or POST JSON-RPC to it directly. Then, in order:",
+          "",
+          "1. **Design:** call `design_brief` with the idea in a sentence (and `where`, a block or corner, if the build is for one part of the place). Read what already exists and who to talk to before proposing anything. Tell the builder who those people are; the brief is where a conversation with neighbors starts, not a replacement for one.",
+          "2. **Content:** `search` and `list` return real records (events, groups, places, resources) with sources and fetch times. Use them instead of sample data. Never invent local businesses, people, or events for a place that has a commons.",
+          "3. **Wiring:** call `live_endpoints` with what the app needs. It returns plain URLs the built app fetches when it loads, so a neighbor's correction reaches every app:",
+          "",
+          "```js",
+          "const res = await fetch(SITE + '/records.json?kind=event&upcoming=1&limit=20');",
+          "const { records } = await res.json(); // each has source.name and fetched_at: show both",
+          "```",
+          "",
+          "4. **Rules:** `about_place` carries the rules that travel with the data (credit, freshness, people only as listed, the more-than-human neighbors' advocates). Follow them in the UI.",
+          "5. **Give back:** when the build produces public data other neighbors could use, publish it as a feed (.ics, Neighborhood API JSON, RSS, CSV) and, with the builder's yes, offer it with `suggest_source`. A steward decides.",
+          "",
+          "An older commons may not have `design_brief` or `live_endpoints` yet; start with `about_place` and `search` there.",
+        ].join("\n");
+        return { content: [{ type: "text" as const, text: `# Place commons\n\n${list}\n${howTo}` }] };
+      } catch (error) {
+        return { content: [{ type: "text" as const, text: `Could not reach the registry: ${error instanceof Error ? error.message : String(error)}` }], isError: true };
       }
     }
   );
@@ -1527,6 +1578,8 @@ Talk about what I'll see, print, and hand out — not the machinery. No flattery
 
 **Start from what exists.** Before designing, look for a seed (\`search-prompt-seeds\`) or a commons tool or recipe (\`search-studio-library\`) close to what I want, and tell me who made it. Remixing is how relational tech spreads.
 
+**The place's own commons first.** If my build is for a specific neighborhood, call \`find-place-commons\`. When the place has one, call its \`design_brief\` with my idea before proposing anything, and tell me who it says to talk to.
+
 **Real data if the day has it.** If my build touches a city's records, call \`find-civic-data-endpoints\` and prefer reading the real rows live over inventing any. When nothing real is in reach, build on a handful of obviously approximate rows and say so plainly in the app and to me. Never invent people presented as real residents.
 
 **Build day sizing.** A few hours, a demo at the end. Build the core loop completely, on seeded data, with one demo neighbor — then stop and polish rather than start a second screen. Everything I'll want after today goes in a short "next" list.
@@ -1548,7 +1601,7 @@ If you need to know who this is for, the one thing it's for, or what my place is
 
 const server = new McpServer({
   name: "rtp-relational-tech",
-  version: "0.7.0",
+  version: "0.8.0",
 });
 
 registerResources(server);
@@ -1579,7 +1632,7 @@ async function startHTTP() {
 
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", server: "rtp-relational-tech", version: "0.7.0", source: "commons" }));
+      res.end(JSON.stringify({ status: "ok", server: "rtp-relational-tech", version: "0.8.0", source: "commons" }));
       return;
     }
 
@@ -1609,7 +1662,7 @@ async function startHTTP() {
 
         const perSessionServer = new McpServer({
           name: "rtp-relational-tech",
-          version: "0.7.0",
+          version: "0.8.0",
         });
         registerResources(perSessionServer);
         registerBuilderResources(perSessionServer);
@@ -1918,7 +1971,7 @@ const LANDING_HTML = `<!DOCTYPE html>
   <p>Your AI will surface relevant recipes, frameworks, methodology, and practitioner references — with attribution and source URLs so you can read the original work.</p>
 
   <h2>What's in the toolbox</h2>
-  <p><strong>12 tools</strong>: <code>search-studio-library</code>, <code>get-tool-details</code>, <code>find-patterns-by-context</code>, <code>suggest-contribution</code>, <code>submit-contribution</code>, <code>get-network-updates</code>, <code>get-builder-guidance</code>, <code>find-civic-data-endpoints</code>, <code>search-prompt-seeds</code>, <code>get-prompt-seed</code>, <code>get-build-day-wall</code>, <code>share-to-build-day-wall</code></p>
+  <p><strong>13 tools</strong>: <code>search-studio-library</code>, <code>get-tool-details</code>, <code>find-patterns-by-context</code>, <code>suggest-contribution</code>, <code>submit-contribution</code>, <code>get-network-updates</code>, <code>get-builder-guidance</code>, <code>find-civic-data-endpoints</code>, <code>find-place-commons</code>, <code>search-prompt-seeds</code>, <code>get-prompt-seed</code>, <code>get-build-day-wall</code>, <code>share-to-build-day-wall</code></p>
   <p><strong>8 prompts</strong>: <code>practice-guide</code>, <code>relational-builder-stance</code>, <code>build-day</code>, <code>design-neighborhood-tool</code>, <code>assess-relational-soil</code>, <code>create-builder-action-plan</code>, <code>remix-existing-tool</code>, <code>create-build-plan</code></p>
   <p><strong>12 resources</strong>: 9 methodology docs at <code>rtp://knowledge/*</code> (queried live from the commons) and 3 at <code>rtp://builder/*</code> — Relational Builder's principles, practices, and domain frames, generated from its source on every deploy</p>
 
